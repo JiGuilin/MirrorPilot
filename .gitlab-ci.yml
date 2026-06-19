@@ -22,9 +22,7 @@ lint:
   before_script:
     # Vite 8 requires Node >=20.19; use nvm to ensure compatible version
     - export NVM_DIR="$HOME/.nvm"
-    - if [ ! -s "$NVM_DIR/nvm.sh" ]; then
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash;
-      fi
+    - if [ ! -s "$NVM_DIR/nvm.sh" ]; then curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash; fi
     - . "$NVM_DIR/nvm.sh"
     - nvm install 22
     - nvm use 22
@@ -43,24 +41,13 @@ build:linux:
     - shell
   before_script:
     # Install system deps — detect package manager (shell executor ignores `image`)
-    - if command -v apt-get >/dev/null 2>&1; then
-        apt-get update &&
-        apt-get install -y curl libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev pkg-config build-essential;
-      elif command -v dnf >/dev/null 2>&1; then
-        dnf install -y curl webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel patchelf openssl-devel pkgconf-pkg-config gcc gcc-c++ make;
-      elif command -v yum >/dev/null 2>&1; then
-        yum install -y curl webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel patchelf openssl-devel pkgconfig gcc gcc-c++ make;
-      else
-        echo "WARNING: unsupported package manager, system deps may be missing";
-      fi
+    - if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y curl libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev pkg-config build-essential; elif command -v dnf >/dev/null 2>&1; then dnf install -y curl webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel patchelf openssl-devel pkgconf-pkg-config gcc gcc-c++ make; elif command -v yum >/dev/null 2>&1; then yum install -y curl webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel patchelf openssl-devel pkgconfig gcc gcc-c++ make; else echo "WARNING: unsupported package manager, system deps may be missing"; fi
     # Install Rust (idempotent if already present)
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - source "$HOME/.cargo/env"
     # Install Node.js 22 LTS via nvm (Vite 8 requires >=20.19)
     - export NVM_DIR="$HOME/.nvm"
-    - if [ ! -s "$NVM_DIR/nvm.sh" ]; then
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash;
-      fi
+    - if [ ! -s "$NVM_DIR/nvm.sh" ]; then curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash; fi
     - . "$NVM_DIR/nvm.sh"
     - nvm install 22
     - nvm use 22
@@ -82,12 +69,6 @@ build:windows:
   tags:
     - windows
   before_script:
-    # Vite 8 requires Node >=20.19; use nvm to ensure compatible version
-    - $env:NVM_HOME = "$env:USERPROFILE\AppData\Roaming\nvm"
-    - if (-not (Test-Path $env:NVM_HOME\nvm.exe)) {
-        curl -o nvm-setup.zip https://github.com/coreybutler/nvm-windows/releases/download/1.2.2/nvm-setup.exe;
-        # ponytail: simplified — nvm-windows is usually pre-installed on the Windows runner
-      }
     - cd frontend
     - npm ci
   script:
