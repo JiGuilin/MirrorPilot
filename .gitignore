@@ -1,0 +1,15 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.sw?
+
+# CodeGraph
+.codegraph/
+
+# Doc builds
+Doc/_build/
