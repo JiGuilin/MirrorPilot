@@ -40,8 +40,7 @@ build:linux:
   tags:
     - shell
   before_script:
-    # Install system deps — detect package manager (shell executor ignores `image`)
-    - 'if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y curl libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev pkg-config build-essential; elif command -v dnf >/dev/null 2>&1; then dnf install -y curl webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel patchelf openssl-devel pkgconf-pkg-config gcc gcc-c++ make; elif command -v yum >/dev/null 2>&1; then yum install -y curl webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel patchelf openssl-devel pkgconfig gcc gcc-c++ make; else echo WARNING: unsupported package manager; fi'
+    # System deps (webkit2gtk etc.) must be pre-installed on the runner host
     # Install Rust (idempotent if already present)
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - source "$HOME/.cargo/env"
