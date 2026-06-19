@@ -17,6 +17,8 @@ variables:
 lint:
   stage: lint
   image: node:20
+  tags:
+    - shell          # ← 加上标签
   <<: *node_cache
   script:
     - cd frontend
@@ -29,6 +31,8 @@ build:linux:
   stage: build
   needs: [lint]
   image: ubuntu:22.04
+  tags:
+    - shell          # ← 加上标签
   before_script:
     - apt-get update && apt-get install -y curl libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev pkg-config build-essential
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -46,7 +50,7 @@ build:windows:
   stage: build
   needs: [lint]
   tags:
-    - windows
+    - windows        # ← 这个需要 Windows 环境的 Runner
   before_script:
     - cd frontend
     - npm install
@@ -57,10 +61,12 @@ build:windows:
       - frontend/src-tauri/target/release/bundle/
     expire_in: 30 days
 
-# --- 发布（仅 tag 触发，自动发布） ---
+# --- 发布 ---
 release:
   stage: release
   image: registry.gitlab.com/gitlab-org/release-cli:latest
+  tags:
+    - shell          # ← 加上标签
   needs:
     - job: build:linux
       artifacts: true

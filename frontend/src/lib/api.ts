@@ -75,3 +75,11 @@ export async function openConfigFile(
 ): Promise<string> {
   return invoke("open_config_file", { packageManager });
 }
+
+export async function exportConfig(): Promise<string> {
+  return invoke("export_config");
+}
+
+export async function importConfig(jsonStr: string): Promise<string> {
+  return invoke("import_config", { jsonStr });
+}

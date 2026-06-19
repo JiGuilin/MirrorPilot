@@ -11,19 +11,20 @@ import { scanCaches, cleanCache } from "../lib/api";
 import type { CacheInfo } from "../types";
 import { PACKAGE_MANAGERS } from "../types";
 
+/* Linear palette — muted lavender range */
 const COLORS = [
-  "#3b82f6",
-  "#8b5cf6",
-  "#06b6d4",
-  "#22c55e",
-  "#eab308",
-  "#f97316",
-  "#ef4444",
-  "#ec4899",
-  "#6366f1",
-  "#14b8a6",
-  "#f59e0b",
-  "#84cc16",
+  "#5e6ad2",
+  "#828fff",
+  "#7a7fad",
+  "#6b72c4",
+  "#9ba3e8",
+  "#4e55b8",
+  "#a8adf0",
+  "#6870cc",
+  "#b3b7f5",
+  "#5560d6",
+  "#c4c7fa",
+  "#3f4ba8",
 ];
 
 interface CacheManagerProps {
@@ -35,23 +36,20 @@ export function CacheManager({ selectedPm }: CacheManagerProps) {
   const [loading, setLoading] = useState(false);
   const [cleaningPm, setCleaningPm] = useState<string | null>(null);
   const [confirmClean, setConfirmClean] = useState<string | null>(null);
+  const [confirmCleanAll, setConfirmCleanAll] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  useEffect(() => {
-    loadCaches();
-  }, []);
+  useEffect(() => { loadCaches(); }, []);
 
   const loadCaches = async () => {
     setLoading(true);
     try {
       const data = await scanCaches();
       setCaches(data);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
     setLoading(false);
   };
 
@@ -69,187 +67,186 @@ export function CacheManager({ selectedPm }: CacheManagerProps) {
     setConfirmClean(null);
   };
 
-  const totalSize = caches
-    .filter((c) => c.exists)
-    .reduce((sum, c) => sum + c.size_bytes, 0);
+  const existingCaches = caches.filter((c) => c.exists);
+
+  const handleCleanAll = async () => {
+    setConfirmCleanAll(false);
+    for (const cache of existingCaches) {
+      setCleaningPm(cache.package_manager);
+      try { await cleanCache(cache.package_manager); } catch (e: any) { /* continue */ }
+    }
+    setCleaningPm(null);
+    setMessage({ type: "success", text: `已清理 ${existingCaches.length} 个缓存` });
+    loadCaches();
+  };
+
+  const totalSize = caches.filter((c) => c.exists).reduce((sum, c) => sum + c.size_bytes, 0);
 
   const chartData = caches
     .filter((c) => c.exists && c.size_bytes > 0)
     .map((c) => {
       const pmInfo = PACKAGE_MANAGERS.find((p) => p.id === c.package_manager);
-      return {
-        name: pmInfo?.displayName || c.package_manager,
-        value: c.size_bytes,
-      };
+      return { name: pmInfo?.displayName || c.package_manager, value: c.size_bytes };
     });
 
   return (
     <div className="h-full flex flex-col">
-      {/* 顶部 */}
-      <div className="px-6 py-4 border-b border-slate-700/50">
+      {/* 顶栏 */}
+      <div className="px-6 py-3.5 border-b border-hairline bg-surface-1">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <HardDrive size={20} className="text-purple-400" />
-            <h2 className="text-lg font-semibold text-white">本地缓存管理</h2>
+          <div className="flex items-center gap-2.5">
+            <HardDrive size={16} className="text-accent" />
+            <h2 className="text-[13px] font-semibold text-ink tracking-tight">本地缓存管理</h2>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-400">
-              总计: <span className="text-white font-medium">{formatBytes(totalSize)}</span>
+            <span className="text-[12px] text-ink-subtle">
+              总计: <span className="text-ink font-medium">{formatBytes(totalSize)}</span>
             </span>
+            {existingCaches.length > 1 && (
+              confirmCleanAll ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleCleanAll}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] bg-lv-danger text-ink hover:bg-lv-danger/80 transition-colors"
+                  >
+                    <AlertTriangle size={11} />
+                    确认清理全部
+                  </button>
+                  <button
+                    onClick={() => setConfirmCleanAll(false)}
+                    className="px-2 py-1 rounded-md text-[11px] text-ink-subtle hover:text-ink-muted"
+                  >
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmCleanAll(true)}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-lv-danger hover:bg-lv-danger/10 transition-colors"
+                >
+                  <Trash2 size={11} />
+                  清理全部
+                </button>
+              )
+            )}
             <button
               onClick={loadCaches}
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-ink-subtle hover:text-ink-muted hover:bg-surface-2"
             >
-              <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-              刷新
+              <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
 
-        {/* 消息 */}
         {message && (
           <div
             className={cn(
-              "mt-2 flex items-center gap-2 px-3 py-2 rounded-md text-sm",
-              message.type === "success"
-                ? "bg-green-500/10 text-green-400"
-                : "bg-red-500/10 text-red-400"
+              "mt-2 flex items-center gap-2 px-3 py-2 rounded-md text-[12px]",
+              message.type === "success" ? "bg-lv-success/10 text-lv-success" : "bg-lv-danger/10 text-lv-danger"
             )}
           >
             {message.text}
-            <button
-              onClick={() => setMessage(null)}
-              className="ml-auto opacity-60 hover:opacity-100"
-            >
-              ×
-            </button>
+            <button onClick={() => setMessage(null)} className="ml-auto opacity-60 hover:opacity-100">×</button>
           </div>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-3">
           {/* 饼图 */}
-          <div className="col-span-1 bg-slate-800/30 rounded-xl border border-slate-700/30 p-4">
-            <h3 className="text-sm font-medium text-slate-300 mb-2">
-              缓存占比
-            </h3>
+          <div className="col-span-1 bg-surface-1 rounded-lg border border-hairline p-4">
+            <h3 className="text-[11px] font-medium text-ink-subtle mb-2">缓存占比</h3>
             {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie
                     data={chartData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
+                    innerRadius={45}
+                    outerRadius={72}
                     paddingAngle={2}
                     dataKey="value"
                   >
                     {chartData.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip
                     formatter={(value: number) => formatBytes(value)}
                     contentStyle={{
-                      backgroundColor: "#1e293b",
-                      border: "1px solid #334155",
+                      backgroundColor: "#141516",
+                      border: "1px solid #34343a",
                       borderRadius: "8px",
-                      color: "#f1f5f9",
-                      fontSize: "12px",
+                      color: "#f7f8f8",
+                      fontSize: "11px",
                     }}
                   />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[200px] flex items-center justify-center text-slate-500 text-sm">
+              <div className="h-[180px] flex items-center justify-center text-ink-tertiary text-[12px]">
                 暂无缓存数据
               </div>
             )}
           </div>
 
           {/* 列表 */}
-          <div className="col-span-2 space-y-2">
+          <div className="col-span-2 space-y-3">
             {caches.map((cache) => {
-              const pmInfo = PACKAGE_MANAGERS.find(
-                (p) => p.id === cache.package_manager
-              );
+              const pmInfo = PACKAGE_MANAGERS.find((p) => p.id === cache.package_manager);
               const isCleaning = cleaningPm === cache.package_manager;
 
               return (
                 <div
                   key={cache.package_manager}
                   className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border",
+                    "flex items-center gap-3 p-4 rounded-lg border",
                     cache.exists
-                      ? "bg-slate-800/30 border-slate-700/30"
-                      : "bg-slate-800/10 border-slate-700/10 opacity-50"
+                      ? "bg-surface-1 border-hairline"
+                      : "bg-surface-1/30 border-hairline/50 opacity-40"
                   )}
                 >
-                  <span className="text-xl flex-shrink-0">
-                    {pmInfo?.icon}
-                  </span>
+                  <span className="text-lg flex-shrink-0">{pmInfo?.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-white">
-                        {pmInfo?.displayName}
-                      </span>
-                      {!cache.exists && (
-                        <span className="text-[10px] text-slate-500">
-                          未找到缓存
-                        </span>
-                      )}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] font-medium text-ink">{pmInfo?.displayName}</span>
+                      {!cache.exists && <span className="text-[10px] text-ink-tertiary">未找到缓存</span>}
                     </div>
                     {cache.exists && (
-                      <p className="text-xs text-slate-400 font-mono truncate">
-                        {cache.path}
-                      </p>
+                      <p className="text-[11px] text-ink-subtle font-mono truncate">{cache.path}</p>
                     )}
                   </div>
 
                   {cache.exists && (
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <div className="text-right">
-                        <p className="text-sm font-semibold text-white">
-                          {formatBytes(cache.size_bytes)}
-                        </p>
-                        <p className="text-[10px] text-slate-500">
-                          {cache.file_count.toLocaleString()} 个文件
-                        </p>
+                        <p className="text-[13px] font-semibold text-ink">{formatBytes(cache.size_bytes)}</p>
+                        <p className="text-[10px] text-ink-tertiary">{cache.file_count.toLocaleString()} 个文件</p>
                       </div>
 
                       {confirmClean === cache.package_manager ? (
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleClean(cache.package_manager)}
-                            className="px-2 py-1 rounded text-xs bg-red-600 text-white hover:bg-red-700 transition-colors"
+                            className="px-2 py-1 rounded-md text-[11px] bg-lv-danger text-ink hover:bg-lv-danger/80 transition-colors"
                           >
                             确认清理
                           </button>
                           <button
                             onClick={() => setConfirmClean(null)}
-                            className="px-2 py-1 rounded text-xs text-slate-400 hover:text-slate-200"
+                            className="px-2 py-1 rounded-md text-[11px] text-ink-subtle hover:text-ink-muted"
                           >
                             取消
                           </button>
                         </div>
                       ) : (
                         <button
-                          onClick={() =>
-                            setConfirmClean(cache.package_manager)
-                          }
+                          onClick={() => setConfirmClean(cache.package_manager)}
                           disabled={isCleaning}
-                          className="flex items-center gap-1 px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-lv-danger hover:bg-lv-danger/10 transition-colors disabled:opacity-50"
                         >
-                          {isCleaning ? (
-                            <RefreshCw size={12} className="animate-spin" />
-                          ) : (
-                            <Trash2 size={12} />
-                          )}
+                          {isCleaning ? <RefreshCw size={11} className="animate-spin" /> : <Trash2 size={11} />}
                           清理
                         </button>
                       )}

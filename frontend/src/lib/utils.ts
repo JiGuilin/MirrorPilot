@@ -26,10 +26,10 @@ export function formatSpeed(kbps: number | null): string {
 }
 
 export function getLatencyColor(ms: number | null): string {
-  if (ms === null) return "text-slate-400";
-  if (ms < 100) return "text-green-400";
-  if (ms < 500) return "text-yellow-400";
-  return "text-red-400";
+  if (ms === null) return "text-ink-subtle";
+  if (ms < 100) return "text-lv-success";
+  if (ms < 500) return "text-lv-warning";
+  return "text-lv-danger";
 }
 
 export function getRegionLabel(region: string): string {

@@ -13,6 +13,7 @@ use modules::types::{
     AppConfig, ApplySourceResult, CacheInfo, PackageManager, PackageManagerStatus, Source,
     SpeedTestResult,
 };
+use serde_json::json;
 
 /// 应用状态
 struct AppState {
@@ -195,6 +196,77 @@ fn open_config_file(package_manager: String) -> Result<String, String> {
     Ok(path.to_string_lossy().to_string())
 }
 
+/// 导出当前所有源配置为 JSON
+#[tauri::command]
+fn export_config(state: State<AppState>) -> Result<String, String> {
+    let pms = [
+        PackageManager::Npm, PackageManager::Yarn, PackageManager::Pnpm,
+        PackageManager::Pip, PackageManager::Uv, PackageManager::Go,
+        PackageManager::Maven, PackageManager::Gradle, PackageManager::Docker,
+        PackageManager::Cargo, PackageManager::NuGet,
+    ];
+    let mut map = serde_json::Map::new();
+    for pm in &pms {
+        let id = pm.id().to_string();
+        let current = ConfigManager::read_current_source(pm);
+        let sources = state.registry.get_sources(&id);
+        map.insert(id, json!({
+            "current_source": current,
+            "sources": sources.iter().map(|s| json!({
+                "name": s.name, "url": s.url, "region": s.region, "is_custom": s.is_custom
+            })).collect::<Vec<_>>()
+        }));
+    }
+    serde_json::to_string_pretty(&json!(map)).map_err(|e| format!("导出失败: {}", e))
+}
+
+/// 从 JSON 导入源配置
+#[tauri::command]
+fn import_config(state: State<AppState>, json_str: String) -> Result<String, String> {
+    let data: serde_json::Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("JSON 解析失败: {}", e))?;
+    let mut applied = 0;
+    if let Some(obj) = data.as_object() {
+        for (pm_id, val) in obj {
+            if let Some(url) = val.get("current_source").and_then(|v| v.as_str()) {
+                if !url.is_empty() {
+                    if let Some(pm) = PackageManager::from_id(pm_id) {
+                        let result = ConfigManager::apply_source(&pm, url);
+                        if result.success { applied += 1; }
+                    }
+                }
+            }
+            // Import custom sources
+            if let Some(sources) = val.get("sources").and_then(|v| v.as_array()) {
+                for src in sources {
+                    if src.get("is_custom").and_then(|v| v.as_bool()).unwrap_or(false) {
+                        let name = src.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                        let url = src.get("url").and_then(|v| v.as_str()).unwrap_or("");
+                        let region = src.get("region").and_then(|v| v.as_str()).unwrap_or("custom");
+                        if !name.is_empty() && !url.is_empty() {
+                            let source = Source {
+                                id: Uuid::new_v4().to_string(),
+                                name: name.to_string(),
+                                url: url.to_string(),
+                                package_manager: pm_id.clone(),
+                                is_builtin: false,
+                                is_custom: true,
+                                region: region.to_string(),
+                                status: "active".to_string(),
+                                latency: None,
+                                speed: None,
+                                last_tested: None,
+                            };
+                            let _ = state.registry.add_custom_source(&source);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(format!("已导入 {} 个源配置", applied))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let registry = SourceRegistry::new().expect("无法初始化数据库");
@@ -226,6 +298,8 @@ pub fn run() {
             save_app_config,
             get_current_source,
             open_config_file,
+            export_config,
+            import_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

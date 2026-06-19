@@ -11,6 +11,7 @@
     "tauri:dev": "set CARGO_TERM_COLOR=always && tauri dev"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
     "@tauri-apps/api": "^2.11.1",
     "clsx": "^2.1.1",
     "flag-icons": "^7.5.0",
