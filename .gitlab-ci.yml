@@ -22,7 +22,7 @@ lint:
   <<: *node_cache
   script:
     - cd frontend
-    - npm install
+    - npm ci
     - npx eslint src/
     - npx tsc --noEmit
 
@@ -38,7 +38,7 @@ build:linux:
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - source "$HOME/.cargo/env"
     - cd frontend
-    - npm install
+    - npm ci
   script:
     - npx tauri build
   artifacts:
@@ -53,7 +53,7 @@ build:windows:
     - windows        # ← 这个需要 Windows 环境的 Runner
   before_script:
     - cd frontend
-    - npm install
+    - npm ci
   script:
     - npx tauri build
   artifacts:

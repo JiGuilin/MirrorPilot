@@ -20,7 +20,7 @@ jobs:
 
       - name: 安装前端依赖
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
       - name: ESLint 检查
         working-directory: frontend
@@ -75,7 +75,7 @@ jobs:
 
       - name: 安装前端依赖
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
       - name: 构建 Tauri 应用
         uses: tauri-apps/tauri-action@v0
