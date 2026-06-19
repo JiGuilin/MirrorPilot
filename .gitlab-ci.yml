@@ -13,12 +13,6 @@ variables:
     paths:
       - frontend/node_modules/
 
-.rust_cache: &rust_cache
-  cache:
-    key: rust-${CI_COMMIT_REF_SLUG}-${CI_RUNNER_TAGS}
-    paths:
-      - frontend/src-tauri/target/
-
 # --- 代码检查 ---
 lint:
   stage: lint
@@ -31,18 +25,9 @@ lint:
     - npx tsc --noEmit
 
 # --- 构建 ---
-.build_base: &build_base
+build:linux:
   stage: build
   needs: [lint]
-  <<: *rust_cache
-  before_script:
-    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    - source "$HOME/.cargo/env"
-    - cd frontend
-    - npm install
-
-build:linux:
-  <<: *build_base
   image: ubuntu:22.04
   before_script:
     - apt-get update && apt-get install -y curl libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev pkg-config build-essential
@@ -55,10 +40,11 @@ build:linux:
   artifacts:
     paths:
       - frontend/src-tauri/target/release/bundle/
-    expire_in: 7 days
+    expire_in: 30 days
 
 build:windows:
-  <<: *build_base
+  stage: build
+  needs: [lint]
   tags:
     - windows
   before_script:
@@ -69,27 +55,21 @@ build:windows:
   artifacts:
     paths:
       - frontend/src-tauri/target/release/bundle/
-    expire_in: 7 days
+    expire_in: 30 days
 
-# --- 发布 ---
+# --- 发布（仅 tag 触发，自动发布） ---
 release:
   stage: release
-  image: node:20
-  needs: [build:linux]
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: build:linux
+      artifacts: true
+    - job: build:windows
+      artifacts: true
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
   script:
-    - echo "发布 $CI_COMMIT_TAG"
-    - cd frontend
-    - npm install
-    - apt-get update && apt-get install -y curl libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev pkg-config build-essential
-    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    - source "$HOME/.cargo/env"
-    - npx tauri build
-  artifacts:
-    paths:
-      - frontend/src-tauri/target/release/bundle/
-    expire_in: 30 days
+    - echo "自动发布 $CI_COMMIT_TAG"
   release:
     tag_name: $CI_COMMIT_TAG
     name: "MirrorPilot $CI_COMMIT_TAG"
