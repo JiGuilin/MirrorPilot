@@ -11,5 +11,8 @@ Thumbs.db
 # CodeGraph
 .codegraph/
 
+# Reference design files
+awesome-design-md/
+
 # Doc builds
 Doc/_build/
