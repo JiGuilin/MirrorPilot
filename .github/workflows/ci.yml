@@ -87,5 +87,5 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'MirrorPilot ${{ github.ref_name }}'
           releaseBody: '详见 [CHANGELOG.md](https://github.com/JiGuilin/MirrorPilot/blob/master/CHANGELOG.md)'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
