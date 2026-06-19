@@ -31,7 +31,7 @@ interface CacheManagerProps {
   selectedPm: string;
 }
 
-export function CacheManager({ selectedPm }: CacheManagerProps) {
+export function CacheManager(_: CacheManagerProps) {
   const [caches, setCaches] = useState<CacheInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [cleaningPm, setCleaningPm] = useState<string | null>(null);
@@ -42,8 +42,6 @@ export function CacheManager({ selectedPm }: CacheManagerProps) {
     text: string;
   } | null>(null);
 
-  useEffect(() => { loadCaches(); }, []);
-
   const loadCaches = async () => {
     setLoading(true);
     try {
@@ -53,6 +51,8 @@ export function CacheManager({ selectedPm }: CacheManagerProps) {
     setLoading(false);
   };
 
+  useEffect(() => { loadCaches(); }, []);
+
   const handleClean = async (pm: string) => {
     setCleaningPm(pm);
     setMessage(null);
@@ -60,8 +60,8 @@ export function CacheManager({ selectedPm }: CacheManagerProps) {
       const result = await cleanCache(pm);
       setMessage({ type: "success", text: result });
       loadCaches();
-    } catch (e: any) {
-      setMessage({ type: "error", text: e.toString() });
+    } catch (_e: unknown) {
+      setMessage({ type: "error", text: String(_e) });
     }
     setCleaningPm(null);
     setConfirmClean(null);
@@ -73,7 +73,7 @@ export function CacheManager({ selectedPm }: CacheManagerProps) {
     setConfirmCleanAll(false);
     for (const cache of existingCaches) {
       setCleaningPm(cache.package_manager);
-      try { await cleanCache(cache.package_manager); } catch (e: any) { /* continue */ }
+        try { await cleanCache(cache.package_manager); } catch { /* continue */ }
     }
     setCleaningPm(null);
     setMessage({ type: "success", text: `已清理 ${existingCaches.length} 个缓存` });
