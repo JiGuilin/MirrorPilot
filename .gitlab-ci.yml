@@ -37,20 +37,22 @@ lint:
 build:linux:
   stage: build
   needs: [lint]
-  image: ubuntu:22.04
   tags:
-    - docker
+    - shell
   before_script:
-    - apt-get update && apt-get install -y curl libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev pkg-config build-essential
-    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    # System deps must be pre-installed on the runner host (see Doc/centos8-tauri-deps.sh)
     - source "$HOME/.cargo/env"
-    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    - apt-get install -y nodejs
+    - export NVM_DIR="$HOME/.nvm"
+    - 'if [ ! -s "$NVM_DIR/nvm.sh" ]; then curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash; fi'
+    - . "$NVM_DIR/nvm.sh"
+    - nvm install 22
+    - nvm use 22
     - node --version
     - cd frontend
     - npm ci
   script:
     - source "$HOME/.cargo/env"
+    - . "$HOME/.nvm/nvm.sh" && nvm use 22
     - npx tauri build
   artifacts:
     paths:
