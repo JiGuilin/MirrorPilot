@@ -30,10 +30,31 @@
   --color-lv-orange: #f76b15;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* ─── Light theme overrides ─── */
+:root.light {
+  --color-canvas: #ffffff;
+  --color-surface-1: #f9f9fb;
+  --color-surface-2: #f0f0f2;
+  --color-surface-3: #e8e8eb;
+  --color-surface-4: #e0e0e3;
+
+  --color-hairline: #e4e4e7;
+  --color-hairline-strong: #d1d1d5;
+  --color-hairline-tertiary: #c4c4c9;
+
+  --color-ink: #1a1a1e;
+  --color-ink-muted: #3f3f46;
+  --color-ink-subtle: #71717a;
+  --color-ink-tertiary: #a1a1aa;
+
+  --color-accent: #5e6ad2;
+  --color-accent-hover: #4f5bc4;
+  --color-accent-focus: #5e69d1;
+
+  --color-lv-success: #16a34a;
+  --color-lv-warning: #ca8a04;
+  --color-lv-danger: #dc2626;
+  --color-lv-orange: #ea580c;
 }
 
 html, body, #root {

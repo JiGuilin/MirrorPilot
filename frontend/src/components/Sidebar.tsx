@@ -6,10 +6,11 @@ import {
   Info,
   ChevronDown,
   Check,
+  Loader2,
+  X,
 } from "lucide-react";
 import { cn } from "../lib/utils";
-import { PACKAGE_MANAGERS, type PackageManagerInfo } from "../types";
-import type { PackageManagerStatus } from "../types";
+import { PACKAGE_MANAGERS, type PackageManagerInfo, type PackageManagerStatus } from "../types";
 
 type Tab = "sources" | "cache" | "settings" | "about";
 
@@ -19,6 +20,7 @@ interface SidebarProps {
   selectedTab: Tab;
   onSelectTab: (tab: Tab) => void;
   pmStatuses: PackageManagerStatus[];
+  detecting: boolean;
 }
 
 export function Sidebar({
@@ -27,18 +29,15 @@ export function Sidebar({
   selectedTab,
   onSelectTab,
   pmStatuses,
+  detecting,
 }: SidebarProps) {
   const [expanded, setExpanded] = useState(true);
 
-  const getStatusForPm = (id: string) =>
-    pmStatuses.find((s) => s.package_manager === id);
+  const statusMap = new Map(pmStatuses.map((s) => [s.package_manager, s]));
+  const get = (id: string) => statusMap.get(id);
 
-  const installedPms = PACKAGE_MANAGERS.filter(
-    (pm) => getStatusForPm(pm.id)?.installed
-  );
-  const notInstalledPms = PACKAGE_MANAGERS.filter(
-    (pm) => !getStatusForPm(pm.id)?.installed
-  );
+  const installedPms = PACKAGE_MANAGERS.filter((pm) => get(pm.id)?.installed);
+  const notInstalledPms = PACKAGE_MANAGERS.filter((pm) => !get(pm.id)?.installed);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "sources", label: "源管理", icon: <Package size={15} /> },
@@ -51,15 +50,15 @@ export function Sidebar({
   ];
 
   const renderPmItem = (pm: PackageManagerInfo) => {
-    const status = getStatusForPm(pm.id);
+    const status = get(pm.id);
     const isActive = selectedPm === pm.id;
 
     return (
       <button
         key={pm.id}
-        onClick={() => onSelectPm(pm.id)}
+        onClick={() => { onSelectPm(pm.id); onSelectTab("sources"); }}
         className={cn(
-          "w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-[13px] transition-all duration-100",
+          "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] transition-all duration-100",
           isActive
             ? "bg-accent/10 text-accent-hover"
             : "text-ink-muted hover:bg-surface-2 hover:text-ink"
@@ -67,8 +66,13 @@ export function Sidebar({
       >
         <span className="text-sm flex-shrink-0">{pm.icon}</span>
         <span className="flex-1 text-left">{pm.displayName}</span>
-        {status?.installed && (
+        {/* ponytail: detecting + 未安装 → 旋转；已安装 → ✓；否则 → ✗ */}
+        {detecting && !status?.installed ? (
+          <Loader2 size={11} className="text-ink-tertiary flex-shrink-0 animate-spin" />
+        ) : status?.installed ? (
           <Check size={11} className="text-lv-success flex-shrink-0" />
+        ) : (
+          <X size={11} className="text-ink-tertiary/50 flex-shrink-0" />
         )}
         {status?.current_source_url && (
           <span className="w-1 h-1 rounded-full bg-accent flex-shrink-0" />
@@ -78,10 +82,9 @@ export function Sidebar({
   };
 
   return (
-    <div className="w-56 h-full bg-canvas border-r border-hairline flex flex-col">
+    <div className="w-48 h-full bg-canvas border-r border-hairline flex flex-col">
       {/* Logo */}
-      <div
-        className="px-4 py-3.5 border-b border-hairline"
+            <div className="px-4 py-2 border-b border-hairline"
         data-tauri-drag-region
       >
         <div className="flex items-center gap-2.5">
@@ -96,7 +99,7 @@ export function Sidebar({
       </div>
 
       {/* Tab 选择 */}
-      <div className="px-2.5 py-2 border-b border-hairline flex gap-0.5">
+      <div className="px-2 py-1 border-b border-hairline flex gap-0.5">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -132,7 +135,7 @@ export function Sidebar({
               />
             </button>
             {expanded && (
-              <div className="mt-1 space-y-1.5">
+              <div className="mt-0.5 space-y-0.5">
                 {installedPms.map(renderPmItem)}
               </div>
             )}
@@ -140,11 +143,11 @@ export function Sidebar({
         )}
 
         {notInstalledPms.length > 0 && (
-          <div className="mt-5">
+          <div className="mt-3">
             <p className="px-2 py-1 text-[10px] text-ink-tertiary">
               未安装 ({notInstalledPms.length})
             </p>
-            <div className="mt-1 space-y-1">
+            <div className="mt-0.5 space-y-0.5">
               {notInstalledPms.map(renderPmItem)}
             </div>
           </div>
@@ -152,7 +155,7 @@ export function Sidebar({
       </div>
 
       {/* 底部标签 */}
-      <div className="px-2.5 py-1.5 border-t border-hairline flex gap-0.5">
+      <div className="px-2 py-1 border-t border-hairline flex gap-0.5">
         {bottomTabs.map((tab) => (
           <button
             key={tab.id}

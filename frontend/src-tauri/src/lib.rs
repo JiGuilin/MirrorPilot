@@ -20,10 +20,10 @@ struct AppState {
     registry: SourceRegistry,
 }
 
-/// 获取所有包管理器状态
+/// 获取所有包管理器状态（并行检测）
 #[tauri::command]
-fn get_package_managers() -> Vec<PackageManagerStatus> {
-    PlatformDetector::detect_all()
+async fn get_package_managers() -> Vec<PackageManagerStatus> {
+    PlatformDetector::detect_all_parallel().await
 }
 
 /// 获取指定包管理器的源列表
@@ -99,21 +99,9 @@ async fn test_sources(
     tester.test_sources(sources, &app_handle).await
 }
 
-/// 快速测延迟
-#[tauri::command]
-async fn test_latency(url: String) -> Result<f64, String> {
-    let tester = NetworkTester::new(10);
-    tester.test_latency(&url).await
-}
-
 /// 获取应用配置
 #[tauri::command]
 fn get_app_config(state: State<AppState>) -> AppConfig {
-    let auto_test = state
-        .registry
-        .get_config("auto_test_on_start")
-        .map(|v| v == "true")
-        .unwrap_or(false);
     let timeout = state
         .registry
         .get_config("test_timeout_seconds")
@@ -134,7 +122,6 @@ fn get_app_config(state: State<AppState>) -> AppConfig {
         .unwrap_or_else(|| "zh-CN".to_string());
 
     AppConfig {
-        auto_test_on_start: auto_test,
         test_timeout_seconds: timeout,
         max_concurrent_tests: max_concurrent,
         theme,
@@ -145,9 +132,6 @@ fn get_app_config(state: State<AppState>) -> AppConfig {
 /// 保存应用配置
 #[tauri::command]
 fn save_app_config(state: State<AppState>, config: AppConfig) -> Result<(), String> {
-    state
-        .registry
-        .set_config("auto_test_on_start", &config.auto_test_on_start.to_string())?;
     state
         .registry
         .set_config("test_timeout_seconds", &config.test_timeout_seconds.to_string())?;
@@ -166,6 +150,29 @@ fn get_current_source(package_manager: String) -> Option<String> {
         .and_then(|pm| ConfigManager::read_current_source(&pm))
 }
 
+// ponytail: 提取跨平台打开逻辑，open_config_file 和 open_folder 共用
+fn open_in_os(path: &std::path::Path, select: bool) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let arg = if select { format!("/select,{}", path.display()) } else { path.display().to_string() };
+        std::process::Command::new("explorer").arg(arg).spawn().map_err(|e| format!("打开失败: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if select {
+            std::process::Command::new("open").args(["-R", &path.to_string_lossy()]).spawn().map_err(|e| format!("打开失败: {}", e))?;
+        } else {
+            std::process::Command::new("open").arg(path).spawn().map_err(|e| format!("打开失败: {}", e))?;
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let target = if select { path.parent().unwrap_or(path) } else { path };
+        std::process::Command::new("xdg-open").arg(target).spawn().map_err(|e| format!("打开失败: {}", e))?;
+    }
+    Ok(())
+}
+
 /// 打开配置文件所在目录（选中文件）
 #[tauri::command]
 fn open_config_file(package_manager: String) -> Result<String, String> {
@@ -173,27 +180,20 @@ fn open_config_file(package_manager: String) -> Result<String, String> {
         .ok_or_else(|| format!("未知的包管理器: {}", package_manager))?;
     let path = ConfigManager::get_config_path(&pm)
         .ok_or("该包管理器没有配置文件")?;
-    // Ensure file exists so the OS can open it
     if !path.exists() {
         std::fs::create_dir_all(path.parent().unwrap_or_else(|| std::path::Path::new(".")))
             .map_err(|e| format!("创建目录失败: {}", e))?;
-        std::fs::write(&path, "")
-            .map_err(|e| format!("创建文件失败: {}", e))?;
+        std::fs::write(&path, "").map_err(|e| format!("创建文件失败: {}", e))?;
     }
-    #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer")
-        .arg(format!("/select,{}", path.display()))
-        .spawn().map_err(|e| format!("打开失败: {}", e))?;
-    #[cfg(target_os = "macos")]
-    std::process::Command::new("open")
-        .arg("-R")
-        .arg(&path)
-        .spawn().map_err(|e| format!("打开失败: {}", e))?;
-    #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open")
-        .arg(path.parent().unwrap_or_else(|| std::path::Path::new(".")))
-        .spawn().map_err(|e| format!("打开失败: {}", e))?;
+    open_in_os(&path, true)?;
     Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn open_folder(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() { return Err(format!("目录不存在: {}", path)); }
+    open_in_os(p, false)
 }
 
 /// 导出当前所有源配置为 JSON
@@ -273,6 +273,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -293,11 +294,11 @@ pub fn run() {
             scan_caches,
             clean_cache,
             test_sources,
-            test_latency,
             get_app_config,
             save_app_config,
             get_current_source,
             open_config_file,
+            open_folder,
             export_config,
             import_config,
         ])

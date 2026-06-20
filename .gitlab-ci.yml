@@ -1,3 +1,7 @@
+workflow:
+  rules:
+    - when: never  # ponytail: 暂时禁用所有 CI 触发
+
 stages:
   - lint
   - build

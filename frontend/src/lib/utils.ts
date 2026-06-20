@@ -51,3 +51,15 @@ export function getRegionFlagClass(region: string): string {
   };
   return classes[region] || "fi fi-un";
 }
+
+export function applyTheme(theme: string) {
+  const root = document.documentElement;
+  root.dataset.theme = theme;
+  if (theme === "light") {
+    root.classList.add("light");
+  } else if (theme === "dark") {
+    root.classList.remove("light");
+  } else {
+    root.classList.toggle("light", window.matchMedia("(prefers-color-scheme: light)").matches);
+  }
+}

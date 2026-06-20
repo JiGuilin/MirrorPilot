@@ -4,34 +4,64 @@ import { SourceManager } from "./components/SourceManager";
 import { CacheManager } from "./components/CacheManager";
 import { SettingsPage } from "./components/SettingsPage";
 import { AboutPage } from "./components/AboutPage";
-import { getPackageManagers } from "./lib/api";
+import { getPackageManagers, getAppConfig } from "./lib/api";
+import { applyTheme } from "./lib/utils";
 import type { PackageManagerStatus } from "./types";
 import { PACKAGE_MANAGERS } from "./types";
 
 type Tab = "sources" | "cache" | "settings" | "about";
 
+// ponytail: 提取到组件外，只计算一次
+const INITIAL_STATUSES: PackageManagerStatus[] = PACKAGE_MANAGERS.map((pm) => ({
+  package_manager: pm.id,
+  display_name: pm.displayName,
+  installed: false,
+  version: null,
+  current_source_url: null,
+  config_path: null,
+}));
+
 function App() {
-  const [selectedPm, setSelectedPm] = useState("npm");
+  const [selectedPm, setSelectedPm] = useState(PACKAGE_MANAGERS[0].id);
   const [selectedTab, setSelectedTab] = useState<Tab>("sources");
-  const [pmStatuses, setPmStatuses] = useState<PackageManagerStatus[]>([]);
+  const [pmStatuses, setPmStatuses] = useState<PackageManagerStatus[]>(INITIAL_STATUSES);
+  const [detecting, setDetecting] = useState(true);
 
   // 加载包管理器状态
   const refreshStatuses = () => {
-    getPackageManagers()
-      .then(setPmStatuses)
-      .catch(console.error);
-  };
-
-  useEffect(() => {
+    setDetecting(true);
     getPackageManagers()
       .then((statuses) => {
         setPmStatuses(statuses);
-        const firstInstalled = statuses.find((s) => s.installed);
-        if (firstInstalled) {
-          setSelectedPm(firstInstalled.package_manager);
-        }
+        // ponytail: 只在用户还没手动选过时自动切到第一个已安装的
+        setSelectedPm((prev) => {
+          const firstInstalled = statuses.find((s) => s.installed);
+          if (firstInstalled && prev === PACKAGE_MANAGERS[0].id) return firstInstalled.package_manager;
+          return prev;
+        });
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setDetecting(false));
+  };
+
+  useEffect(() => {
+    // 启动时立即应用主题，避免闪烁
+    getAppConfig()
+      .then((cfg) => applyTheme(cfg.theme))
+      .catch(() => {});
+
+    // 异步加载检测结果（侧边栏已经用静态列表渲染了）
+    refreshStatuses();
+  }, []);
+
+  // ponytail: 只在 system 模式时响应系统主题变化
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    const handler = () => {
+      if (document.documentElement.dataset.theme === "system") applyTheme("system");
+    };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
   }, []);
 
   const currentPmStatus = pmStatuses.find(
@@ -50,7 +80,7 @@ function App() {
           />
         );
       case "cache":
-        return <CacheManager selectedPm={selectedPm} />;
+        return <CacheManager />;
       case "settings":
         return <SettingsPage />;
       case "about":
@@ -68,12 +98,13 @@ function App() {
         selectedTab={selectedTab}
         onSelectTab={setSelectedTab}
         pmStatuses={pmStatuses}
+        detecting={detecting}
       />
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部标题栏 */}
-        {selectedTab === "sources" || selectedTab === "cache" ? (
+        {selectedTab === "sources" ? (
           <header
-            className="flex items-center justify-between px-6 py-2.5 border-b border-hairline bg-surface-1"
+            className="flex items-center justify-between px-4 py-1.5 border-b border-hairline bg-surface-1"
             data-tauri-drag-region
           >
             <div className="flex items-center gap-2">
@@ -81,11 +112,13 @@ function App() {
               <span className="text-[13px] font-medium text-ink tracking-tight">
                 {pmInfo?.displayName}
               </span>
-              {currentPmStatus?.installed && (
+              {currentPmStatus?.installed && currentPmStatus.version ? (
                 <span className="text-[10px] text-ink-tertiary">
                   v{currentPmStatus.version}
                 </span>
-              )}
+              ) : detecting ? (
+                <span className="text-[10px] text-ink-tertiary">检测中...</span>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               {currentPmStatus?.current_source_url && (

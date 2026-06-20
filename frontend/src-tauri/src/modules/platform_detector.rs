@@ -15,6 +15,41 @@ impl PlatformDetector {
         }
     }
 
+    /// 快速检查命令是否在 PATH 中（which/where），比 fork 子进程跑 --version 快得多
+    fn is_on_path(cmd: &str) -> bool {
+        let lookup = if cfg!(windows) {
+            std::process::Command::new("cmd")
+                .args(["/C", "where", cmd])
+                .output()
+        } else {
+            std::process::Command::new("which")
+                .arg(cmd)
+                .output()
+        };
+        matches!(lookup, Ok(o) if o.status.success())
+    }
+
+    /// 获取包管理器对应的命令名
+    fn command_name(pm: &PackageManager) -> &'static str {
+        match pm {
+            PackageManager::Npm => "npm",
+            PackageManager::Yarn => "yarn",
+            PackageManager::Pnpm => "pnpm",
+            PackageManager::Pip => "pip",
+            PackageManager::Uv => "uv",
+            PackageManager::Go => "go",
+            PackageManager::Maven => "mvn",
+            PackageManager::Gradle => "gradle",
+            PackageManager::Docker => "docker",
+            PackageManager::Apt => "apt",
+            PackageManager::Yum => "yum",
+            PackageManager::Homebrew => "brew",
+            PackageManager::Cargo => "cargo",
+            PackageManager::NuGet => "nuget",
+            PackageManager::Chocolatey => "choco",
+        }
+    }
+
     /// 检测指定包管理器是否已安装
     pub fn detect_package_manager(pm: &PackageManager) -> PackageManagerStatus {
         let platform = Self::detect_platform();
@@ -31,32 +66,42 @@ impl PlatformDetector {
             };
         }
 
-        // 检查是否安装
-        let (installed, version) = Self::check_installed(pm);
+        let cmd = Self::command_name(pm);
 
-        // 如果安装了，获取当前源配置
-        let current_source_url = if installed {
-            crate::modules::config_manager::ConfigManager::read_current_source(pm)
-        } else {
-            None
-        };
+        // ponytail: which/where 预检，跳过不在 PATH 上的命令，省掉 --version 的子进程开销
+        if !Self::is_on_path(cmd) {
+            return PackageManagerStatus {
+                package_manager: pm.id().to_string(),
+                display_name: pm.display_name().to_string(),
+                installed: false,
+                version: None,
+                current_source_url: None,
+                config_path: crate::modules::config_manager::ConfigManager::get_config_path(pm)
+                    .map(|p| p.to_string_lossy().to_string()),
+            };
+        }
 
-        // 获取配置文件路径
+        // 已在 PATH 上，获取版本号
+        let (_, version) = Self::check_installed(pm);
+
+        let current_source_url =
+            crate::modules::config_manager::ConfigManager::read_current_source(pm);
+
         let config_path = crate::modules::config_manager::ConfigManager::get_config_path(pm)
             .map(|p| p.to_string_lossy().to_string());
 
         PackageManagerStatus {
             package_manager: pm.id().to_string(),
             display_name: pm.display_name().to_string(),
-            installed,
+            installed: true,
             version,
             current_source_url,
             config_path,
         }
     }
 
-    /// 检测所有支持的包管理器
-    pub fn detect_all() -> Vec<PackageManagerStatus> {
+    /// 并行检测所有支持的包管理器
+    pub async fn detect_all_parallel() -> Vec<PackageManagerStatus> {
         let pms = [
             PackageManager::Npm,
             PackageManager::Yarn,
@@ -72,7 +117,29 @@ impl PlatformDetector {
             PackageManager::Chocolatey,
         ];
 
-        pms.iter().map(Self::detect_package_manager).collect()
+        let handles: Vec<_> = pms
+            .iter()
+            .map(|pm| {
+                let pm = pm.clone();
+                tokio::task::spawn_blocking(move || Self::detect_package_manager(&pm))
+            })
+            .collect();
+
+        let mut results = Vec::with_capacity(handles.len());
+        for handle in handles {
+            match handle.await {
+                Ok(status) => results.push(status),
+                Err(_) => results.push(PackageManagerStatus {
+                    package_manager: String::new(),
+                    display_name: String::new(),
+                    installed: false,
+                    version: None,
+                    current_source_url: None,
+                    config_path: None,
+                }),
+            }
+        }
+        results
     }
 
     fn check_installed(pm: &PackageManager) -> (bool, Option<String>) {
@@ -94,7 +161,6 @@ impl PlatformDetector {
             PackageManager::Chocolatey => ("choco", vec!["--version"]),
         };
 
-        // On Windows, use `cmd /C` so PATH-resolved tools (nvm/fnm managed node, etc.) are found
         let output = if cfg!(windows) {
             let mut full_args = vec!["/C".to_string(), cmd.to_string()];
             full_args.extend(args.iter().map(|s| s.to_string()));
@@ -110,7 +176,6 @@ impl PlatformDetector {
         match output {
             Ok(o) if o.status.success() => {
                 let version_str = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                // 提取版本号（取第一行）
                 let version = version_str.lines().next().map(|s| s.to_string());
                 (true, version)
             }

@@ -6,10 +6,13 @@
 
 ## ✨ 功能特性
 
-- **🔍 自动检测** — 自动识别已安装的包管理器及其当前镜像源
+- **🔍 自动检测** — 并行识别已安装的包管理器及其当前镜像源
 - **🔄 一键切换** — 快速在官方源与各大镜像站之间切换
-- **⚡ 网络测速** — 实时测试镜像源延迟与下载速度，智能推荐最优源
-- **📦 广泛支持** — 覆盖主流包管理器
+- **⚡ 网络测速** — 延迟 + 下载速度综合评分，智能推荐最优源
+- **📊 缓存管理** — 可视化缓存占比，一键清理或打开目录
+- **🎨 主题切换** — 深色 / 浅色 / 跟随系统
+- **📦 广泛支持** — 覆盖 12 个主流包管理器
+- **📥 配置导入导出** — 团队间快速同步镜像源配置
 
 ### 支持的包管理器
 
@@ -34,7 +37,7 @@
 
 ## 🖥️ 技术栈
 
-- **前端**：React + TypeScript + Tailwind CSS
+- **前端**：React + TypeScript + Tailwind CSS v4
 - **后端**：Rust (Tauri 2.0)
 - **构建**：Vite
 
@@ -42,23 +45,22 @@
 
 ### 环境要求
 
-- [Node.js](https://nodejs.org/) >= 18
+- [Node.js](https://nodejs.org/) >= 20
 - [Rust](https://www.rust-lang.org/tools/install) >= 1.77
-- [pnpm](https://pnpm.io/)（推荐）
 
 ### 开发
 
 ```bash
 cd frontend
-pnpm install
-pnpm tauri dev
+npm install
+npm run tauri dev
 ```
 
 ### 构建
 
 ```bash
 cd frontend
-pnpm tauri build
+npm run tauri build
 ```
 
 ## 📄 开源协议

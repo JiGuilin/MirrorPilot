@@ -52,10 +52,6 @@ export async function testSources(
   return invoke("test_sources", { sources });
 }
 
-export async function testLatency(url: string): Promise<number> {
-  return invoke("test_latency", { url });
-}
-
 export async function getAppConfig(): Promise<AppConfig> {
   return invoke("get_app_config");
 }
@@ -74,6 +70,10 @@ export async function openConfigFile(
   packageManager: string
 ): Promise<string> {
   return invoke("open_config_file", { packageManager });
+}
+
+export async function openFolder(path: string): Promise<void> {
+  return invoke("open_folder", { path });
 }
 
 export async function exportConfig(): Promise<string> {

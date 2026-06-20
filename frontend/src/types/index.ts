@@ -53,7 +53,6 @@ export interface ApplySourceResult {
 }
 
 export interface AppConfig {
-  auto_test_on_start: boolean;
   test_timeout_seconds: number;
   max_concurrent_tests: number;
   theme: string;

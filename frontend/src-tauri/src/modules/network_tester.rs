@@ -100,24 +100,8 @@ impl NetworkTester {
             );
 
             let result = match self.test_speed(url).await {
-                Ok((latency, speed)) => SpeedTestResult {
-                    source_id: id.clone(),
-                    source_name: name.clone(),
-                    source_url: url.clone(),
-                    latency_ms: Some(latency),
-                    speed_kbps: Some(speed),
-                    success: true,
-                    error_message: None,
-                },
-                Err(e) => SpeedTestResult {
-                    source_id: id.clone(),
-                    source_name: name.clone(),
-                    source_url: url.clone(),
-                    latency_ms: None,
-                    speed_kbps: None,
-                    success: false,
-                    error_message: Some(e),
-                },
+                Ok((latency, speed)) => SpeedTestResult::ok(id, name, url, latency, speed),
+                Err(e) => SpeedTestResult::fail(id, name, url, e),
             };
 
             results.push(result);

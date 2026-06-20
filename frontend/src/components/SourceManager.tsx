@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Zap,
   Plus,
@@ -39,6 +39,7 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set());
   const [testingAll, setTestingAll] = useState(false);
   const [testProgress, setTestProgress] = useState<SpeedTestProgress | null>(null);
+  const [batchTestDone, setBatchTestDone] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"default" | "latency" | "speed">("default");
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -50,10 +51,17 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
   } | null>(null);
 
   const fastestSource = useMemo(() => {
-    const tested = sources.filter((s) => s.latency !== null && s.id !== "__current__");
+    if (!batchTestDone) return null;
+    const tested = sources.filter((s) => s.latency !== null);
     if (tested.length === 0) return null;
-    return tested.reduce((best, s) => (s.latency! < best.latency! ? s : best), tested[0]);
-  }, [sources]);
+    // ponytail: 综合评分 = 延迟归一化 * 0.5 + 速度归一化 * 0.5，分数越低越好
+    const maxLat = Math.max(...tested.map((s) => s.latency!));
+    const maxSpd = Math.max(...tested.map((s) => s.speed ?? 0));
+    const score = (s: Source) =>
+      (maxLat > 0 ? s.latency! / maxLat : 0) * 0.5 +
+      (maxSpd > 0 ? 1 - (s.speed ?? 0) / maxSpd : 0) * 0.5;
+    return tested.reduce((best, s) => score(s) < score(best) ? s : best, tested[0]);
+  }, [sources, batchTestDone]);
 
   const displayedSources = useMemo(() => {
     let filtered = sources;
@@ -63,21 +71,16 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
         (s) => s.name.toLowerCase().includes(q) || s.url.toLowerCase().includes(q)
       );
     }
-    if (sortBy === "latency") {
-      return [...filtered].sort((a, b) => {
-        if (a.latency === null) return 1;
-        if (b.latency === null) return -1;
-        return a.latency - b.latency;
-      });
-    }
-    if (sortBy === "speed") {
-      return [...filtered].sort((a, b) => {
-        if (a.speed === null) return 1;
-        if (b.speed === null) return -1;
-        return b.speed - a.speed;
-      });
-    }
-    return filtered;
+    // ponytail: null 排末尾的通用比较器
+    const nullLast = (a: number | null, b: number | null) => {
+      if (a === null) return 1;
+      if (b === null) return -1;
+      return 0;
+    };
+    const result = [...filtered];
+    if (sortBy === "latency") result.sort((a, b) => nullLast(a.latency, b.latency) || a.latency! - b.latency!);
+    else if (sortBy === "speed") result.sort((a, b) => nullLast(a.speed, b.speed) || b.speed! - a.speed!);
+    return result;
   }, [sources, searchQuery, sortBy]);
 
   const loadData = useCallback(async () => {
@@ -100,7 +103,7 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
           latency: null,
           speed: null,
           last_tested: null,
-        });
+        } satisfies Source);
       }
       setSources(srcs);
       setCurrentUrl(curUrl);
@@ -112,7 +115,7 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const unlistenRef = React.useRef<(() => void) | null>(null);
+  const unlistenRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     listen<SpeedTestProgress>("speed-test-progress", (event) => {
       setTestProgress(event.payload);
@@ -162,18 +165,10 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
 
   const handleTest = async (source: Source) => {
     setTestingIds((prev) => new Set(prev).add(source.id));
+    setBatchTestDone(false); // 单个测速不触发推荐
+    // ponytail: 不手动更新state——speed-test-progress事件监听器已处理
     try {
-      const results = await testSources([[source.id, source.name, source.url]]);
-      const r = results[0];
-      if (r && r.success) {
-        setSources((prev) =>
-          prev.map((s) =>
-            s.id === source.id
-              ? { ...s, latency: r.latency_ms, speed: r.speed_kbps, last_tested: new Date().toISOString() }
-              : s
-          )
-        );
-      }
+      await testSources([[source.id, source.name, source.url]]);
     } catch (e) { console.error(e); }
     setTestingIds((prev) => { const next = new Set(prev); next.delete(source.id); return next; });
   };
@@ -181,10 +176,12 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
   const handleTestAll = async () => {
     if (sources.length === 0) return;
     setTestingAll(true);
+    setBatchTestDone(false);
     setTestProgress(null);
     try {
       const testData: Array<[string, string, string]> = sources.map((s) => [s.id, s.name, s.url]);
       await testSources(testData);
+      setBatchTestDone(true);
     } catch (e) { console.error(e); }
     setTestingAll(false);
     setTestProgress(null);
@@ -217,7 +214,7 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
   return (
     <div className="h-full flex flex-col">
       {/* 当前源信息 */}
-      <div className="px-6 py-3 border-b border-hairline bg-surface-1">
+      <div className="px-4 py-2 border-b border-hairline bg-surface-1">
         <div className="flex items-center justify-between">
           <div className="min-w-0">
             <p className="text-[10px] text-ink-subtle mb-1">当前源</p>
@@ -239,7 +236,7 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
             </p>
             <button
               onClick={() => openConfigFile(selectedPm).catch(() => {})}
-              className="flex-shrink-0 text-[10px] text-accent hover:text-accent-hover transition-colors"
+              className="flex-shrink-0 text-[10px] text-accent hover:text-accent-hover hover:underline cursor-pointer transition-colors"
             >
               打开
             </button>
@@ -264,8 +261,8 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
       )}
 
       {/* 源列表 */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="flex-1 overflow-y-auto px-4 py-2">
+        <div className="flex items-center justify-between mb-2">
           <h3 className="text-[13px] font-medium text-ink-muted">
             可用源 ({sources.length})
           </h3>
@@ -320,7 +317,7 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
 
         {/* 进度条 */}
         {testingAll && testProgress && (
-          <div className="mb-4">
+          <div className="mb-2">
             <div className="flex items-center justify-between text-[10px] text-ink-subtle mb-1">
               <span>测试 {testProgress.current}/{testProgress.total}: {testProgress.current_source_name}</span>
               <span>{Math.round((testProgress.current / testProgress.total) * 100)}%</span>
@@ -339,13 +336,13 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
             <RefreshCw size={18} className="animate-spin text-ink-subtle" />
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             {/* 最快推荐 */}
-            {fastestSource && fastestSource.latency !== null && (
-              <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-lv-warning/5 border border-lv-warning/15">
+            {fastestSource && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-lv-warning/5 border border-lv-warning/15">
                 <Trophy size={13} className="text-lv-warning flex-shrink-0" />
                 <span className="text-[11px] text-lv-warning">推荐最快：</span>
-                <span className="text-[11px] text-ink font-medium">{fastestSource.name}</span>
+                <span className="text-[11px] text-ink font-medium">{currentUrl === fastestSource.url ? "当前源" : fastestSource.name}</span>
                 <span className={cn("text-[11px]", getLatencyColor(fastestSource.latency))}>
                   {formatLatency(fastestSource.latency)}
                 </span>
@@ -374,7 +371,7 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
                 <div
                   key={source.id}
                   className={cn(
-                    "p-4 rounded-lg border transition-all",
+                    "p-2.5 rounded-lg border transition-all",
                     isCurrent
                       ? "bg-accent/8 border-accent/25"
                       : "bg-surface-1 border-hairline hover:bg-surface-2"
@@ -464,7 +461,7 @@ export function SourceManager({ selectedPm, pmStatus, onSourceApplied }: SourceM
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-surface-1 rounded-lg border border-hairline-strong p-5 w-96">
             <h3 className="text-[13px] font-semibold text-ink mb-3">添加自定义源</h3>
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               <div>
                 <label className="text-[11px] text-ink-subtle">名称</label>
                 <input

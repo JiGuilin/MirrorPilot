@@ -131,6 +131,15 @@ pub struct SpeedTestResult {
     pub error_message: Option<String>,
 }
 
+impl SpeedTestResult {
+    pub fn ok(id: &str, name: &str, url: &str, latency: f64, speed: f64) -> Self {
+        Self { source_id: id.to_string(), source_name: name.to_string(), source_url: url.to_string(), latency_ms: Some(latency), speed_kbps: Some(speed), success: true, error_message: None }
+    }
+    pub fn fail(id: &str, name: &str, url: &str, err: String) -> Self {
+        Self { source_id: id.to_string(), source_name: name.to_string(), source_url: url.to_string(), latency_ms: None, speed_kbps: None, success: false, error_message: Some(err) }
+    }
+}
+
 /// 测速进度
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpeedTestProgress {
@@ -172,7 +181,6 @@ pub struct ApplySourceResult {
 /// 用户配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    pub auto_test_on_start: bool,
     pub test_timeout_seconds: u64,
     pub max_concurrent_tests: usize,
     pub theme: String,
@@ -182,7 +190,6 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
-            auto_test_on_start: false,
             test_timeout_seconds: 10,
             max_concurrent_tests: 5,
             theme: "system".to_string(),

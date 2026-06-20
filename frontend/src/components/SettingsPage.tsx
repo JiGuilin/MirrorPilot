@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
 import { Settings, Moon, Sun, Monitor, Save, RotateCcw, Download, Upload } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn, applyTheme } from "../lib/utils";
 import { getAppConfig, saveAppConfig, exportConfig, importConfig } from "../lib/api";
 import type { AppConfig } from "../types";
 
 const DEFAULT_CONFIG: AppConfig = {
-  auto_test_on_start: false,
   test_timeout_seconds: 10,
   max_concurrent_tests: 5,
   theme: "system",
@@ -86,7 +85,7 @@ export function SettingsPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-6 py-3.5 border-b border-hairline bg-surface-1">
+      <div className="px-4 py-2 border-b border-hairline bg-surface-1">
         <div className="flex items-center gap-2.5">
           <Settings size={16} className="text-accent" />
           <h2 className="text-[13px] font-semibold text-ink tracking-tight">设置</h2>
@@ -103,17 +102,17 @@ export function SettingsPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 max-w-xl">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-5 max-w-xl">
         {/* 主题 */}
         <section>
-          <h3 className="text-[11px] font-medium text-ink-subtle mb-2.5 uppercase tracking-wider">外观</h3>
+          <h3 className="text-[11px] font-medium text-ink-subtle mb-1.5 uppercase tracking-wider">外观</h3>
           <div className="flex gap-2">
             {themeOptions.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => setConfig({ ...config, theme: opt.value })}
+                onClick={() => { const v = opt.value; setConfig({ ...config, theme: v }); applyTheme(v); }}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 rounded-md border text-[12px] transition-all",
+                  "flex items-center gap-2 px-3 py-1.5 rounded-md border text-[12px] transition-all",
                   config.theme === opt.value
                     ? "bg-accent/15 border-accent/30 text-accent-hover"
                     : "bg-surface-1 border-hairline text-ink-muted hover:bg-surface-2"
@@ -128,26 +127,8 @@ export function SettingsPage() {
 
         {/* 测速 */}
         <section>
-          <h3 className="text-[11px] font-medium text-ink-subtle mb-3 uppercase tracking-wider">测速</h3>
-          <div className="space-y-4 bg-surface-1 rounded-lg border border-hairline p-5">
-            <label className="flex items-center justify-between">
-              <span className="text-[13px] text-ink-muted">启动时自动测速</span>
-              <button
-                onClick={() => setConfig({ ...config, auto_test_on_start: !config.auto_test_on_start })}
-                className={cn(
-                  "relative w-9 h-[18px] rounded-full transition-colors",
-                  config.auto_test_on_start ? "bg-accent" : "bg-hairline-strong"
-                )}
-              >
-                <span className={cn(
-                  "absolute top-[2px] w-[14px] h-[14px] rounded-full bg-ink transition-transform",
-                  config.auto_test_on_start ? "left-[18px]" : "left-[2px]"
-                )} />
-              </button>
-            </label>
-
-            <div className="h-px bg-hairline" />
-
+          <h3 className="text-[11px] font-medium text-ink-subtle mb-2 uppercase tracking-wider">测速</h3>
+          <div className="space-y-2.5 bg-surface-1 rounded-lg border border-hairline p-3">
             <label className="flex items-center justify-between">
               <span className="text-[13px] text-ink-muted">超时时间（秒）</span>
               <input
@@ -178,7 +159,7 @@ export function SettingsPage() {
 
         {/* 导入导出 */}
         <section>
-          <h3 className="text-[11px] font-medium text-ink-subtle mb-2.5 uppercase tracking-wider">配置导入导出</h3>
+          <h3 className="text-[11px] font-medium text-ink-subtle mb-1.5 uppercase tracking-wider">配置导入导出</h3>
           <div className="flex gap-2">
             <button
               onClick={handleExport}
@@ -196,12 +177,12 @@ export function SettingsPage() {
               {importing ? "导入中..." : "导入配置"}
             </button>
           </div>
-          <p className="mt-2 text-[10px] text-ink-tertiary">导出包含当前所有源配置和自定义源，可分享给团队成员</p>
+          <p className="mt-1 text-[10px] text-ink-tertiary">导出包含当前所有源配置和自定义源，可分享给团队成员</p>
         </section>
 
         {/* 语言 */}
         <section>
-          <h3 className="text-[11px] font-medium text-ink-subtle mb-2.5 uppercase tracking-wider">语言</h3>
+          <h3 className="text-[11px] font-medium text-ink-subtle mb-1.5 uppercase tracking-wider">语言</h3>
           <select
             value={config.language}
             onChange={(e) => setConfig({ ...config, language: e.target.value })}
@@ -214,7 +195,7 @@ export function SettingsPage() {
       </div>
 
       {/* 底部 */}
-      <div className="px-5 py-2.5 border-t border-hairline flex items-center justify-end gap-2">
+      <div className="px-4 py-1.5 border-t border-hairline flex items-center justify-end gap-2">
         <button
           onClick={handleReset}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] text-ink-subtle hover:text-ink-muted hover:bg-surface-2 transition-colors"
