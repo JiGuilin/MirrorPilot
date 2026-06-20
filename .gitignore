@@ -14,6 +14,9 @@ Thumbs.db
 # Doc builds
 Doc/_build/
 
+# Design specs (local only)
+awesome-design-md/
+
 # Dependencies
 node_modules/
 
