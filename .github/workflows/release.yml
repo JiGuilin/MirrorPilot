@@ -24,13 +24,13 @@ jobs:
             os: macos-latest
             target: aarch64-apple-darwin
             arch: aarch64
-            exe_name: MirrorPilot
+            exe_name: mirrorpilot
             portable_name: MirrorPilot_${{ github.ref_name }}_macos_aarch64_portable
           - platform: linux
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             arch: amd64
-            exe_name: MirrorPilot
+            exe_name: mirrorpilot
             portable_name: MirrorPilot_${{ github.ref_name }}_linux_amd64_portable
     runs-on: ${{ matrix.os }}
 
