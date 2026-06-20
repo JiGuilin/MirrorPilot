@@ -1,7 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.3.0";
 
 export function AboutPage() {
   const handleOpenGitHub = () => {

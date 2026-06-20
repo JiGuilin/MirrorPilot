@@ -1,6 +1,6 @@
 [package]
 name = "mirrorpilot"
-version = "0.2.0"
+version = "0.3.0"
 description = "MirrorPilot - 镜像领航员，统一管理开发环境中各包管理器的镜像源配置"
 authors = ["MirrorPilot Team"]
 license = "MIT"
