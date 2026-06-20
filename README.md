@@ -39,6 +39,16 @@
 预置了清华大学、阿里云、腾讯云、华为云、中科大、字节跳动等国内主流镜像站，以及官方源。
 Rustup 支持清华/中科大/字节跳动镜像，WinGet 支持 Microsoft Store 源，NuGet (dotnet) 支持华为云镜像。
 
+## 📸 界面预览
+
+### 源管理
+
+![源管理](frontend/public/screenshots/源管理.png)
+
+### 缓存管理
+
+![缓存管理](frontend/public/screenshots/缓存管理.png)
+
 ## 🖥️ 技术栈
 
 - **前端**：React + TypeScript + Tailwind CSS v4
