@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: [master]
-    tags: ['v*']
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -31,48 +30,20 @@ jobs:
         working-directory: frontend
         run: npx --no-install tsc --noEmit
 
-  # ponytail: 仅在推 tag 时构建发布，避免分支推送产生无意义的 release
-  build:
-    name: 构建 ${{ matrix.platform }}
-    needs: lint
-    # 只在推 tag 时执行构建和发布
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            exe_name: MirrorPilot.exe
-            portable_name: MirrorPilot_${{ github.ref_name }}_windows_portable.exe
-          - platform: macos
-            os: macos-latest
-            target: aarch64-apple-darwin
-            exe_name: MirrorPilot
-            portable_name: MirrorPilot_${{ github.ref_name }}_macos_portable
-          - platform: linux
-            os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            exe_name: MirrorPilot
-            portable_name: MirrorPilot_${{ github.ref_name }}_linux_portable
-    runs-on: ${{ matrix.os }}
-
+  # ponytail: 构建测试（不发布），确保代码能编译通过
+  build-test:
+    name: 构建测试
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: 安装 Linux 依赖
-        if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
 
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
       - name: Rust 缓存
         uses: swatinem/rust-cache@v2
@@ -87,33 +58,8 @@ jobs:
         working-directory: frontend
         run: npm install --registry https://registry.npmmirror.com
 
-      - name: 构建 Tauri 应用
-        id: tauri
-        uses: tauri-apps/tauri-action@v0
+      - name: 构建 Tauri 应用（测试）
+        working-directory: frontend
+        run: npm run tauri build
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: frontend
-          tauriScript: npx tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: 'MirrorPilot ${{ github.ref_name }}'
-          releaseBody: '详见 [CHANGELOG.md](https://github.com/JiGuilin/MirrorPilot/blob/master/CHANGELOG.md)'
-          releaseDraft: false
-          prerelease: false
-
-      # ponytail: 上传单文件可执行程序（portable），与安装包一起提供
-      # 使用 gh CLI 上传，避免需要 releaseUploadUrl
-      - name: 上传单文件可执行程序
-        shell: bash
-        run: |
-          EXE_PATH="frontend/src-tauri/target/release/${{ matrix.exe_name }}"
-          if [ -f "$EXE_PATH" ]; then
-            echo "Uploading portable executable: ${{ matrix.portable_name }}"
-            gh release upload "${{ github.ref_name }}" "$EXE_PATH" --clobber --repo "${{ github.repository }}"
-          else
-            echo "Portable executable not found at $EXE_PATH"
-            exit 1
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
+          CI: true

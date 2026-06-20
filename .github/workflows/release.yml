@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: 构建 ${{ matrix.platform }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            exe_name: MirrorPilot.exe
+            portable_name: MirrorPilot_${{ github.ref_name }}_windows_portable.exe
+          - platform: macos
+            os: macos-latest
+            target: aarch64-apple-darwin
+            exe_name: MirrorPilot
+            portable_name: MirrorPilot_${{ github.ref_name }}_macos_portable
+          - platform: linux
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            exe_name: MirrorPilot
+            portable_name: MirrorPilot_${{ github.ref_name }}_linux_portable
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Linux 依赖
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust 缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri -> target
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安装前端依赖
+        working-directory: frontend
+        run: npm install --registry https://registry.npmmirror.com
+
+      - name: 构建 Tauri 应用
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: frontend
+          tauriScript: npx tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: 'MirrorPilot ${{ github.ref_name }}'
+          releaseBody: '详见 [CHANGELOG.md](https://github.com/JiGuilin/MirrorPilot/blob/master/CHANGELOG.md)'
+          releaseDraft: false
+          prerelease: false
+
+      # ponytail: 上传单文件可执行程序（portable），与安装包一起提供
+      - name: 上传单文件可执行程序
+        shell: bash
+        run: |
+          EXE_PATH="frontend/src-tauri/target/release/${{ matrix.exe_name }}"
+          if [ -f "$EXE_PATH" ]; then
+            echo "Uploading portable executable: ${{ matrix.portable_name }}"
+            gh release upload "${{ github.ref_name }}" "$EXE_PATH" --clobber --repo "${{ github.repository }}"
+          else
+            echo "Portable executable not found at $EXE_PATH"
+            exit 1
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
