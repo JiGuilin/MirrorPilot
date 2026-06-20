@@ -17,18 +17,21 @@ jobs:
           - platform: windows
             os: windows-latest
             target: x86_64-pc-windows-msvc
+            arch: amd64
             exe_name: MirrorPilot.exe
-            portable_name: MirrorPilot_${{ github.ref_name }}_windows_portable.exe
+            portable_name: MirrorPilot_${{ github.ref_name }}_windows_amd64_portable.exe
           - platform: macos
             os: macos-latest
             target: aarch64-apple-darwin
+            arch: aarch64
             exe_name: MirrorPilot
-            portable_name: MirrorPilot_${{ github.ref_name }}_macos_portable
+            portable_name: MirrorPilot_${{ github.ref_name }}_macos_aarch64_portable
           - platform: linux
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            arch: amd64
             exe_name: MirrorPilot
-            portable_name: MirrorPilot_${{ github.ref_name }}_linux_portable
+            portable_name: MirrorPilot_${{ github.ref_name }}_linux_amd64_portable
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -73,13 +76,17 @@ jobs:
           prerelease: false
 
       # ponytail: 上传单文件可执行程序（portable），与安装包一起提供
+      # 先复制并重命名为带版本号的文件名，再上传
       - name: 上传单文件可执行程序
         shell: bash
         run: |
           EXE_PATH="frontend/src-tauri/target/release/${{ matrix.exe_name }}"
+          PORTABLE_NAME="${{ matrix.portable_name }}"
           if [ -f "$EXE_PATH" ]; then
-            echo "Uploading portable executable: ${{ matrix.portable_name }}"
-            gh release upload "${{ github.ref_name }}" "$EXE_PATH" --clobber --repo "${{ github.repository }}"
+            echo "Copying and renaming to: $PORTABLE_NAME"
+            cp "$EXE_PATH" "$PORTABLE_NAME"
+            echo "Uploading portable executable: $PORTABLE_NAME"
+            gh release upload "${{ github.ref_name }}" "$PORTABLE_NAME" --clobber --repo "${{ github.repository }}"
           else
             echo "Portable executable not found at $EXE_PATH"
             exit 1
