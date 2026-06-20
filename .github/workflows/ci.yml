@@ -20,15 +20,15 @@ jobs:
 
       - name: 安装前端依赖
         working-directory: frontend
-        run: npm ci
+        run: npm install --registry https://registry.npmmirror.com
 
       - name: ESLint 检查
         working-directory: frontend
-        run: npx eslint src/
+        run: npx --no-install eslint src/
 
       - name: TypeScript 类型检查
         working-directory: frontend
-        run: npx tsc --noEmit
+        run: npx --no-install tsc --noEmit
 
   build:
     name: 构建 ${{ matrix.platform }}
@@ -75,7 +75,7 @@ jobs:
 
       - name: 安装前端依赖
         working-directory: frontend
-        run: npm ci
+        run: npm install --registry https://registry.npmmirror.com
 
       - name: 构建 Tauri 应用
         uses: tauri-apps/tauri-action@v0
