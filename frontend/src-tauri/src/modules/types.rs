@@ -18,6 +18,9 @@ pub enum PackageManager {
     Cargo,
     NuGet,
     Chocolatey,
+    DotNet,
+    Winget,
+    Rustup,
 }
 
 impl PackageManager {
@@ -38,6 +41,9 @@ impl PackageManager {
             PackageManager::Cargo => "cargo",
             PackageManager::NuGet => "nuget",
             PackageManager::Chocolatey => "chocolatey",
+            PackageManager::DotNet => "dotnet",
+            PackageManager::Winget => "winget",
+            PackageManager::Rustup => "rustup",
         }
     }
 
@@ -58,6 +64,9 @@ impl PackageManager {
             PackageManager::Cargo => "Cargo",
             PackageManager::NuGet => "NuGet",
             PackageManager::Chocolatey => "Chocolatey",
+            PackageManager::DotNet => "NuGet",
+            PackageManager::Winget => "WinGet",
+            PackageManager::Rustup => "Rustup",
         }
     }
 
@@ -80,6 +89,9 @@ impl PackageManager {
             "cargo" => Some(PackageManager::Cargo),
             "nuget" => Some(PackageManager::NuGet),
             "chocolatey" => Some(PackageManager::Chocolatey),
+            "dotnet" => Some(PackageManager::DotNet),
+            "winget" => Some(PackageManager::Winget),
+            "rustup" => Some(PackageManager::Rustup),
             _ => None,
         }
     }
@@ -89,7 +101,8 @@ impl PackageManager {
         match self {
             PackageManager::Apt | PackageManager::Yum => vec![Platform::Linux],
             PackageManager::Homebrew => vec![Platform::MacOS, Platform::Linux],
-            PackageManager::NuGet | PackageManager::Chocolatey => vec![Platform::Windows],
+            PackageManager::NuGet | PackageManager::Chocolatey | PackageManager::Winget => vec![Platform::Windows],
+            // ponytail: DotNet 跨平台（Win/Mac/Linux），Rustup 跨平台
             _ => vec![Platform::Windows, Platform::MacOS, Platform::Linux],
         }
     }

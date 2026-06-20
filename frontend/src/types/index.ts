@@ -79,4 +79,7 @@ export const PACKAGE_MANAGERS: PackageManagerInfo[] = [
   { id: "cargo", displayName: "Cargo", icon: "🦀", color: "#DEA584" },
   { id: "nuget", displayName: "NuGet", icon: "📋", color: "#004880" },
   { id: "chocolatey", displayName: "Chocolatey", icon: "🍫", color: "#80B5E3" },
+  { id: "dotnet", displayName: "NuGet", icon: "💠", color: "#512BD4" },
+  { id: "winget", displayName: "WinGet", icon: "🪟", color: "#0078D4" },
+  { id: "rustup", displayName: "Rustup", icon: "⚙️", color: "#CE422B" },
 ];

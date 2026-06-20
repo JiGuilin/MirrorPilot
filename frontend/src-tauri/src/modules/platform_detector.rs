@@ -1,3 +1,4 @@
+use crate::modules::silent_command::silent_command;
 use crate::modules::types::{PackageManager, PackageManagerStatus, Platform};
 
 /// 平台和包管理器检测模块
@@ -15,18 +16,9 @@ impl PlatformDetector {
         }
     }
 
-    /// 快速检查命令是否在 PATH 中（which/where），比 fork 子进程跑 --version 快得多
+    /// 快速检查命令是否在 PATH 中（纯 Rust，零子进程）
     fn is_on_path(cmd: &str) -> bool {
-        let lookup = if cfg!(windows) {
-            std::process::Command::new("cmd")
-                .args(["/C", "where", cmd])
-                .output()
-        } else {
-            std::process::Command::new("which")
-                .arg(cmd)
-                .output()
-        };
-        matches!(lookup, Ok(o) if o.status.success())
+        which::which(cmd).is_ok()
     }
 
     /// 获取包管理器对应的命令名
@@ -47,6 +39,9 @@ impl PlatformDetector {
             PackageManager::Cargo => "cargo",
             PackageManager::NuGet => "nuget",
             PackageManager::Chocolatey => "choco",
+            PackageManager::DotNet => "dotnet",
+            PackageManager::Winget => "winget",
+            PackageManager::Rustup => "rustup",
         }
     }
 
@@ -54,7 +49,6 @@ impl PlatformDetector {
     pub fn detect_package_manager(pm: &PackageManager) -> PackageManagerStatus {
         let platform = Self::detect_platform();
 
-        // 检查平台是否支持
         if !pm.supported_platforms().contains(&platform) {
             return PackageManagerStatus {
                 package_manager: pm.id().to_string(),
@@ -68,7 +62,6 @@ impl PlatformDetector {
 
         let cmd = Self::command_name(pm);
 
-        // ponytail: which/where 预检，跳过不在 PATH 上的命令，省掉 --version 的子进程开销
         if !Self::is_on_path(cmd) {
             return PackageManagerStatus {
                 package_manager: pm.id().to_string(),
@@ -81,7 +74,6 @@ impl PlatformDetector {
             };
         }
 
-        // 已在 PATH 上，获取版本号
         let (_, version) = Self::check_installed(pm);
 
         let current_source_url =
@@ -115,6 +107,9 @@ impl PlatformDetector {
             PackageManager::Cargo,
             PackageManager::NuGet,
             PackageManager::Chocolatey,
+            PackageManager::DotNet,
+            PackageManager::Winget,
+            PackageManager::Rustup,
         ];
 
         let handles: Vec<_> = pms
@@ -159,24 +154,34 @@ impl PlatformDetector {
             PackageManager::Cargo => ("cargo", vec!["--version"]),
             PackageManager::NuGet => ("nuget", vec!["help"]),
             PackageManager::Chocolatey => ("choco", vec!["--version"]),
+            PackageManager::DotNet => ("dotnet", vec!["--version"]),
+            PackageManager::Winget => ("winget", vec!["--version"]),
+            PackageManager::Rustup => ("rustup", vec!["--version"]),
         };
 
-        let output = if cfg!(windows) {
-            let mut full_args = vec!["/C".to_string(), cmd.to_string()];
-            full_args.extend(args.iter().map(|s| s.to_string()));
-            std::process::Command::new("cmd")
-                .args(&full_args)
-                .output()
-        } else {
-            std::process::Command::new(cmd)
-                .args(&args)
-                .output()
-        };
+        // ponytail: silent_command 自动处理 Windows .cmd 脚本，CREATE_NO_WINDOW 防弹窗
+        let output = silent_command(cmd)
+            .args(&args)
+            .output();
 
         match output {
             Ok(o) if o.status.success() => {
                 let version_str = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                let version = version_str.lines().next().map(|s| s.to_string());
+                // ponytail: 清理版本号 — 去 v 前缀，从多行输出中提取纯版本号
+                let version = version_str.lines().next().map(|s| {
+                    let s = s.trim().strip_prefix('v').unwrap_or(s.trim());
+                    // "rustup 1.29.0 ..." → "1.29.0", "Go go1.24.4 ..." → "go1.24.4"
+                    if let Some(pos) = s.find(|c: char| c.is_ascii_digit()) {
+                        let rest = &s[pos..];
+                        if let Some(end) = rest.find(' ') {
+                            rest[..end].to_string()
+                        } else {
+                            rest.to_string()
+                        }
+                    } else {
+                        s.to_string()
+                    }
+                });
                 (true, version)
             }
             _ => (false, None),

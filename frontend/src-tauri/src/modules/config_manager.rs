@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use crate::modules::silent_command::silent_command;
 use crate::modules::types::{ApplySourceResult, PackageManager};
 
 /// 配置文件管理器 - 读写各包管理器的配置文件
@@ -11,7 +12,6 @@ impl ConfigManager {
     pub fn get_config_path(pm: &PackageManager) -> Option<PathBuf> {
         match pm {
             PackageManager::Npm | PackageManager::Pnpm => {
-                // 用户级 .npmrc
                 let home = dirs::home_dir()?;
                 Some(home.join(".npmrc"))
             }
@@ -38,7 +38,6 @@ impl ConfigManager {
                 }
             }
             PackageManager::Go => {
-                // go env -w writes to this file
                 if cfg!(windows) {
                     let appdata = dirs::data_dir()?;
                     Some(appdata.join("go").join("env"))
@@ -72,10 +71,7 @@ impl ConfigManager {
             PackageManager::Yum => {
                 Some(PathBuf::from("/etc/yum.repos.d"))
             }
-            PackageManager::Homebrew => {
-                // 环境变量方式，无固定文件
-                None
-            }
+            PackageManager::Homebrew => None,
             PackageManager::Cargo => {
                 let home = dirs::home_dir()?;
                 Some(home.join(".cargo").join("config.toml"))
@@ -91,6 +87,23 @@ impl ConfigManager {
             }
             PackageManager::Chocolatey => {
                 Some(PathBuf::from("C:\\ProgramData\\chocolatey\\config\\chocolatey.config"))
+            }
+            // ponytail: DotNet 用 dotnet nuget 子命令管理源，配置文件复用 NuGet 路径
+            PackageManager::DotNet => {
+                if cfg!(windows) {
+                    let appdata = dirs::data_dir()?;
+                    Some(appdata.join("NuGet").join("NuGet.Config"))
+                } else {
+                    let home = dirs::home_dir()?;
+                    Some(home.join(".config").join("NuGet").join("NuGet.Config"))
+                }
+            }
+            // ponytail: Winget 通过命令行管理源，无本地配置文件
+            PackageManager::Winget => None,
+            // ponytail: Rustup 镜像通过环境变量或 rustup 配置文件
+            PackageManager::Rustup => {
+                let home = dirs::home_dir()?;
+                Some(home.join(".rustup").join("settings.toml"))
             }
         }
     }
@@ -114,10 +127,7 @@ impl ConfigManager {
                 let path = Self::get_config_path(pm)?;
                 Self::read_uv_index_url(&path)
             }
-            PackageManager::Go => {
-                // 通过 go env GOPROXY 读取
-                Self::read_go_env_proxy()
-            }
+            PackageManager::Go => Self::read_go_env_proxy(),
             PackageManager::Maven => {
                 let path = Self::get_config_path(pm)?;
                 Self::read_maven_mirror(&path)
@@ -138,9 +148,10 @@ impl ConfigManager {
                 let path = Self::get_config_path(pm)?;
                 Self::read_nuget_source(&path)
             }
-            PackageManager::Apt | PackageManager::Yum | PackageManager::Homebrew | PackageManager::Chocolatey => {
-                None
-            }
+            PackageManager::DotNet => Self::read_dotnet_nuget_source(),
+            PackageManager::Winget => Self::read_winget_source(),
+            PackageManager::Rustup => Self::read_rustup_mirror(),
+            PackageManager::Apt | PackageManager::Yum | PackageManager::Homebrew | PackageManager::Chocolatey => None,
         }
     }
 
@@ -174,6 +185,9 @@ impl ConfigManager {
                 Self::get_config_path(pm).map_or_else(Self::no_path_result, |p| Self::write_cargo_source(&p, url)),
             PackageManager::NuGet =>
                 Self::get_config_path(pm).map_or_else(Self::no_path_result, |p| Self::write_nuget_source(&p, url)),
+            PackageManager::DotNet => Self::write_dotnet_nuget_source(url),
+            PackageManager::Winget => Self::write_winget_source(url),
+            PackageManager::Rustup => Self::write_rustup_mirror(url),
             PackageManager::Apt | PackageManager::Yum | PackageManager::Homebrew | PackageManager::Chocolatey =>
                 Self::unsupported_result(),
         }
@@ -201,7 +215,6 @@ impl ConfigManager {
             let line = line.trim();
             if line.starts_with("registry") {
                 let rest = line["registry".len()..].trim();
-                // yarnrc uses: registry "https://..."  or  registry: https://...  or  registry=https://...
                 let url = rest
                     .trim_start_matches(':')
                     .trim_start_matches('=')
@@ -245,18 +258,12 @@ impl ConfigManager {
             .map(|s| s.to_string())
     }
 
+    // ponytail: 直接调用 go 命令，不经过 cmd /C，CREATE_NO_WINDOW 防弹窗
     fn read_go_env_proxy() -> Option<String> {
-        let output = if cfg!(windows) {
-            std::process::Command::new("cmd")
-                .args(["/C", "go", "env", "GOPROXY"])
-                .output()
-                .ok()?
-        } else {
-            std::process::Command::new("go")
-                .args(["env", "GOPROXY"])
-                .output()
-                .ok()?
-        };
+        let output = silent_command("go")
+            .args(["env", "GOPROXY"])
+            .output()
+            .ok()?;
         if output.status.success() {
             let proxy = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !proxy.is_empty() {
@@ -268,7 +275,6 @@ impl ConfigManager {
 
     fn read_maven_mirror(path: &PathBuf) -> Option<String> {
         let content = fs::read_to_string(path).ok()?;
-        // 简单解析 XML 中的 mirror url
         if let Some(start) = content.find("<url>") {
             if let Some(end) = content.find("</url>") {
                 return Some(content[start + 6..end].trim().to_string());
@@ -316,7 +322,6 @@ impl ConfigManager {
         let mirror = value.get("source")
             .and_then(|v| v.get(replace_name))?;
 
-        // Prefer sparse-registry, fall back to registry
         if let Some(url) = mirror.get("sparse-registry").and_then(|v| v.as_str()) {
             return Some(format!("sparse+{}", url));
         }
@@ -331,6 +336,72 @@ impl ConfigManager {
             let remaining = &content[start + 7..];
             if let Some(end) = remaining.find('"') {
                 return Some(remaining[..end].to_string());
+            }
+        }
+        None
+    }
+
+    // ponytail: dotnet nuget list source — 解析输出获取第一个非官方源 URL
+    fn read_dotnet_nuget_source() -> Option<String> {
+        let output = silent_command("dotnet")
+            .args(["nuget", "list", "source"])
+            .output()
+            .ok()?;
+        if !output.status.success() { return None; }
+        let text = String::from_utf8_lossy(&output.stdout);
+        // 输出格式: "  1.  nuget.org [已启用]\n      https://api.nuget.org/v3/index.json"
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
+                return Some(trimmed.to_string());
+            }
+        }
+        None
+    }
+
+    // ponytail: winget source list — 解析输出获取非 msstore 源 URL
+    fn read_winget_source() -> Option<String> {
+        let output = silent_command("winget")
+            .args(["source", "list"])
+            .output()
+            .ok()?;
+        if !output.status.success() { return None; }
+        let text = String::from_utf8_lossy(&output.stdout);
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("名称") || trimmed.starts_with("-") { continue; }
+            // 格式: "winget      https://cdn.winget.microsoft.com/cache        false"
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 2 {
+                let url = parts[1];
+                if url.starts_with("https://") || url.starts_with("http://") {
+                    return Some(url.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    // ponytail: Rustup 镜像通过 RUSTUP_DIST_SERVER 环境变量或 settings.toml
+    fn read_rustup_mirror() -> Option<String> {
+        // 优先读环境变量
+        if let Ok(val) = std::env::var("RUSTUP_DIST_SERVER") {
+            if !val.is_empty() {
+                return Some(val);
+            }
+        }
+        // 回退读 settings.toml
+        if let Some(path) = dirs::home_dir() {
+            let settings_path = path.join(".rustup").join("settings.toml");
+            if let Ok(content) = fs::read_to_string(&settings_path) {
+                for line in content.lines() {
+                    if let Some(rest) = line.trim().strip_prefix("dist_server") {
+                        let url = rest.trim_start_matches('=').trim().trim_matches('"').trim_matches('\'');
+                        if !url.is_empty() {
+                            return Some(url.to_string());
+                        }
+                    }
+                }
             }
         }
         None
@@ -369,7 +440,6 @@ impl ConfigManager {
         }
     }
 
-    /// Replace or append a line matching `prefix` in a key-value text file (npmrc/yarnrc style)
     fn replace_or_append_line(path: &PathBuf, url: &str, prefix: &str, new_line: &str, label: &str) -> ApplySourceResult {
         let backup = Self::backup_file(path);
         Self::ensure_parent_dir(path);
@@ -501,15 +571,9 @@ impl ConfigManager {
     }
 
     fn write_go_env_proxy(url: &str) -> ApplySourceResult {
-        let output = if cfg!(windows) {
-            std::process::Command::new("cmd")
-                .args(["/C", "go", "env", "-w", &format!("GOPROXY={}", url)])
-                .output()
-        } else {
-            std::process::Command::new("go")
-                .args(["env", "-w", &format!("GOPROXY={}", url)])
-                .output()
-        };
+        let output = silent_command("go")
+            .args(["env", "-w", &format!("GOPROXY={}", url)])
+            .output();
 
         match output {
             Ok(o) if o.status.success() => ApplySourceResult {
@@ -585,7 +649,6 @@ impl ConfigManager {
         }
 
         let result = serde_json::to_string_pretty(&config).unwrap_or_default();
-        // ponytail: Docker 写入可能因权限失败，保留单独的错误提示
         match fs::write(path, result) {
             Ok(_) => ApplySourceResult {
                 success: true,
@@ -604,7 +667,6 @@ impl ConfigManager {
         let backup = Self::backup_file(path);
         Self::ensure_parent_dir(path);
 
-        // Support sparse+https://... or plain https://... URLs
         let content = if let Some(sparse_url) = url.strip_prefix("sparse+") {
             format!(
                 r#"[source.crates-io]
@@ -641,5 +703,117 @@ registry = '{}'
 "#, url);
 
         Self::write_result(&format!("已成功设置 NuGet 镜像源为 {}", url), backup, fs::write(path, content))
+    }
+
+    // ponytail: dotnet nuget remove source + add source，用子命令而非手写 XML
+    fn write_dotnet_nuget_source(url: &str) -> ApplySourceResult {
+        // 先移除旧的 MirrorPilot 源（忽略失败）
+        let _ = silent_command("dotnet")
+            .args(["nuget", "remove", "source", "MirrorPilot"])
+            .output();
+
+        let output = silent_command("dotnet")
+            .args(["nuget", "add", "source", url, "-n", "MirrorPilot"])
+            .output();
+
+        match output {
+            Ok(o) if o.status.success() => ApplySourceResult {
+                success: true,
+                message: format!("已成功设置 .NET NuGet 镜像源为 {}", url),
+                backup_path: None,
+            },
+            Ok(o) => ApplySourceResult {
+                success: false,
+                message: format!("设置失败: {}", String::from_utf8_lossy(&o.stderr)),
+                backup_path: None,
+            },
+            Err(e) => ApplySourceResult {
+                success: false,
+                message: format!("执行 dotnet 命令失败: {}", e),
+                backup_path: None,
+            },
+        }
+    }
+
+    // ponytail: winget source add — 用子命令管理
+    fn write_winget_source(url: &str) -> ApplySourceResult {
+        // 先移除旧源（忽略失败）
+        let _ = silent_command("winget")
+            .args(["source", "remove", "--name", "MirrorPilot"])
+            .output();
+
+        let output = silent_command("winget")
+            .args(["source", "add", "--name", "MirrorPilot", "--arg", url])
+            .output();
+
+        match output {
+            Ok(o) if o.status.success() => ApplySourceResult {
+                success: true,
+                message: format!("已成功设置 WinGet 镜像源为 {}", url),
+                backup_path: None,
+            },
+            Ok(o) => ApplySourceResult {
+                success: false,
+                message: format!("设置失败: {}", String::from_utf8_lossy(&o.stderr)),
+                backup_path: None,
+            },
+            Err(e) => ApplySourceResult {
+                success: false,
+                message: format!("执行 winget 命令失败: {}", e),
+                backup_path: None,
+            },
+        }
+    }
+
+    // ponytail: Rustup 镜像写入 settings.toml
+    fn write_rustup_mirror(url: &str) -> ApplySourceResult {
+        let home = match dirs::home_dir() {
+            Some(h) => h,
+            None => return Self::no_path_result(),
+        };
+        let settings_path = home.join(".rustup").join("settings.toml");
+        let _ = fs::create_dir_all(settings_path.parent().unwrap_or_else(|| std::path::Path::new(".")));
+
+        let mut content = if settings_path.exists() {
+            fs::read_to_string(&settings_path).unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        let new_line = format!("dist_server = \"{}\"", url);
+        let mut found = false;
+        let lines: Vec<String> = content.lines().map(|line| {
+            let trimmed = line.trim();
+            if trimmed.starts_with("dist_server") {
+                found = true;
+                new_line.clone()
+            } else {
+                line.to_string()
+            }
+        }).collect();
+
+        let result = if found {
+            lines.join("\n")
+        } else {
+            if !content.is_empty() && !content.ends_with('\n') {
+                content.push('\n');
+            }
+            content.push_str(&new_line);
+            content.push('\n');
+            content
+        };
+
+        match fs::write(&settings_path, result) {
+            Ok(_) => ApplySourceResult {
+                success: true,
+                message: format!("已成功设置 Rustup 镜像为 {}（重启终端生效）", url),
+                backup_path: None,
+            },
+            Err(e) => ApplySourceResult {
+                success: false,
+                message: format!("写入失败: {}", e),
+                backup_path: None,
+            },
+        }
     }
 }

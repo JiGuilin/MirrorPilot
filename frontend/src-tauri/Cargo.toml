@@ -34,4 +34,5 @@ chrono = { version = "0.4", features = ["serde"] }
 # ponytail: regex removed, never used
 # ponytail: thiserror removed, never used (errors are manual format!)
 uuid = { version = "1", features = ["v4"] }
+which = "7"
 # ponytail: once_cell removed, unused (stdlib LazyLock since 1.80)

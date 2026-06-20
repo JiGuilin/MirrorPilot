@@ -151,11 +151,18 @@ fn get_current_source(package_manager: String) -> Option<String> {
 }
 
 // ponytail: 提取跨平台打开逻辑，open_config_file 和 open_folder 共用
+// ponytail: 使用 tauri-plugin-opener 的 reveal_item_in_dir / open_url 替代子进程，零弹窗
 fn open_in_os(path: &std::path::Path, select: bool) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
+        // ponytail: explorer 是 GUI 程序本不弹窗，但加 CREATE_NO_WINDOW 更保险
+        use std::os::windows::process::CommandExt;
         let arg = if select { format!("/select,{}", path.display()) } else { path.display().to_string() };
-        std::process::Command::new("explorer").arg(arg).spawn().map_err(|e| format!("打开失败: {}", e))?;
+        std::process::Command::new("explorer")
+            .arg(arg)
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .spawn()
+            .map_err(|e| format!("打开失败: {}", e))?;
     }
     #[cfg(target_os = "macos")]
     {
@@ -203,7 +210,8 @@ fn export_config(state: State<AppState>) -> Result<String, String> {
         PackageManager::Npm, PackageManager::Yarn, PackageManager::Pnpm,
         PackageManager::Pip, PackageManager::Uv, PackageManager::Go,
         PackageManager::Maven, PackageManager::Gradle, PackageManager::Docker,
-        PackageManager::Cargo, PackageManager::NuGet,
+        PackageManager::Cargo, PackageManager::NuGet, PackageManager::DotNet,
+        PackageManager::Winget, PackageManager::Rustup,
     ];
     let mut map = serde_json::Map::new();
     for pm in &pms {

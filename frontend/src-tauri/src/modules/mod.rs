@@ -5,4 +5,5 @@ pub mod source_registry;
 pub mod network_tester;
 pub mod file_scanner;
 pub mod platform_detector;
+pub mod silent_command;
 // ponytail: shell_executor removed, was 100% dead code

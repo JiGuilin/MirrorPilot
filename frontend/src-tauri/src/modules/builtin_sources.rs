@@ -97,6 +97,20 @@ pub fn get_builtin_sources(pm: &PackageManager) -> Vec<Source> {
         PackageManager::Chocolatey => vec![
             make_source("choco-official", "Chocolatey 官方", "https://chocolatey.org/api/v2/", "chocolatey", "us"),
         ],
+        PackageManager::DotNet => vec![
+            make_source("dotnet-nuget-official", "NuGet 官方", "https://api.nuget.org/v3/index.json", "dotnet", "us"),
+            make_source("dotnet-huawei", "华为云", "https://repo.huaweicloud.com/repository/nuget/v3/index.json", "dotnet", "cn"),
+        ],
+        PackageManager::Winget => vec![
+            make_source("winget-official", "WinGet 官方", "https://cdn.winget.microsoft.com/cache", "winget", "us"),
+            make_source("winget-msstore", "Microsoft Store", "https://storeedgefd.dsx.mp.microsoft.com/v9.0", "winget", "us"),
+        ],
+        PackageManager::Rustup => vec![
+            make_source("rustup-official", "Rustup 官方", "https://static.rust-lang.org", "rustup", "us"),
+            make_source("rustup-tuna", "清华镜像", "https://mirrors.tuna.tsinghua.edu.cn/rustup", "rustup", "cn"),
+            make_source("rustup-ustc", "中科大", "https://mirrors.ustc.edu.cn/rust-static", "rustup", "cn"),
+            make_source("rustup-byte", "字节跳动", "https://rsproxy.cn/rustup", "rustup", "cn"),
+        ],
     }
 }
 

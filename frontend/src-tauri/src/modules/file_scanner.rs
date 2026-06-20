@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::modules::silent_command::silent_command;
 use crate::modules::types::{CacheInfo, PackageManager};
 
 /// 文件扫描模块 - 扫描包管理器的缓存目录
@@ -95,6 +96,21 @@ impl FileScanner {
             PackageManager::Chocolatey => {
                 Some(PathBuf::from(r"C:\ProgramData\chocolatey\lib"))
             }
+            // ponytail: DotNet NuGet 缓存同 NuGet
+            PackageManager::DotNet => {
+                let local = dirs::cache_dir()?;
+                Some(local.join("NuGet"))
+            }
+            // ponytail: Winget 缓存目录
+            PackageManager::Winget => {
+                let local = dirs::cache_dir()?;
+                Some(local.join("winget"))
+            }
+            // ponytail: Rustup 工具链缓存
+            PackageManager::Rustup => {
+                let home = dirs::home_dir()?;
+                Some(home.join(".rustup").join("toolchains"))
+            }
         }
     }
 
@@ -113,6 +129,9 @@ impl FileScanner {
             PackageManager::Docker,
             PackageManager::NuGet,
             PackageManager::Chocolatey,
+            PackageManager::DotNet,
+            PackageManager::Winget,
+            PackageManager::Rustup,
         ];
 
         package_managers
@@ -178,7 +197,7 @@ impl FileScanner {
 
         match pm {
             PackageManager::Npm => {
-                let output = std::process::Command::new("npm")
+                let output = silent_command("npm")
                     .args(["cache", "clean", "--force"])
                     .output()
                     .map_err(|e| format!("执行 npm cache clean 失败: {}", e))?;
@@ -187,7 +206,7 @@ impl FileScanner {
                 }
             }
             PackageManager::Yarn => {
-                let output = std::process::Command::new("yarn")
+                let output = silent_command("yarn")
                     .args(["cache", "clean"])
                     .output()
                     .map_err(|e| format!("执行 yarn cache clean 失败: {}", e))?;
@@ -196,10 +215,20 @@ impl FileScanner {
                 }
             }
             PackageManager::Go => {
-                let output = std::process::Command::new("go")
+                let output = silent_command("go")
                     .args(["clean", "-modcache"])
                     .output()
                     .map_err(|e| format!("执行 go clean -modcache 失败: {}", e))?;
+                if !output.status.success() {
+                    return Err(format!("清理失败: {}", String::from_utf8_lossy(&output.stderr)));
+                }
+            }
+            // ponytail: dotnet nuget locals --clear
+            PackageManager::DotNet => {
+                let output = silent_command("dotnet")
+                    .args(["nuget", "locals", "all", "--clear"])
+                    .output()
+                    .map_err(|e| format!("执行 dotnet nuget locals --clear 失败: {}", e))?;
                 if !output.status.success() {
                     return Err(format!("清理失败: {}", String::from_utf8_lossy(&output.stderr)));
                 }
