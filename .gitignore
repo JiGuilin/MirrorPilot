@@ -11,8 +11,25 @@ Thumbs.db
 # CodeGraph
 .codegraph/
 
-# Reference design files
-awesome-design-md/
-
 # Doc builds
 Doc/_build/
+
+# Dependencies
+node_modules/
+
+# Build output
+frontend/src-tauri/target/
+frontend/dist/
+
+# Lock files (内网源 resolved URL 不兼容公共 CI)
+frontend/package-lock.json
+
+# Rust lock (CI 自动生成)
+frontend/src-tauri/Cargo.lock
+
+# Tauri generated
+frontend/src-tauri/gen/
+
+# Logs
+*.log
+npm-debug.log*
