@@ -94,3 +94,35 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
+
+      # ponytail: 同步到 GitLab Release（默认禁用，需要时设置 vars.GITLAB_SYNC_ENABLED=true）
+      - name: 同步到 GitLab Release
+        if: ${{ vars.GITLAB_SYNC_ENABLED == 'true' }}
+        shell: bash
+        run: |
+          PORTABLE_NAME="${{ matrix.portable_name }}"
+          INSTALLER_PATH=$(find frontend/src-tauri/target/release/bundle -type f \( -name "*.msi" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" \) | head -1)
+          
+          # 创建或获取 GitLab Release
+          curl -s -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+            "${{ vars.GITLAB_URL }}/api/v4/projects/${{ vars.GITLAB_PROJECT_ID }}/releases/${{ github.ref_name }}" || \
+          curl -s -X POST -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"MirrorPilot ${{ github.ref_name }}\",\"tag_name\":\"${{ github.ref_name }}\",\"description\":\"详见 CHANGELOG.md\"}" \
+            "${{ vars.GITLAB_URL }}/api/v4/projects/${{ vars.GITLAB_PROJECT_ID }}/releases"
+          
+          # 上传 portable 文件
+          if [ -f "$PORTABLE_NAME" ]; then
+            curl -s --upload-file "$PORTABLE_NAME" \
+              -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+              "${{ vars.GITLAB_URL }}/api/v4/projects/${{ vars.GITLAB_PROJECT_ID }}/packages/generic/mirrorpilot/${{ github.ref_name }}/${PORTABLE_NAME}"
+          fi
+          
+          # 上传安装包
+          if [ -n "$INSTALLER_PATH" ] && [ -f "$INSTALLER_PATH" ]; then
+            INSTALLER_NAME=$(basename "$INSTALLER_PATH")
+            curl -s --upload-file "$INSTALLER_PATH" \
+              -H "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+              "${{ vars.GITLAB_URL }}/api/v4/projects/${{ vars.GITLAB_PROJECT_ID }}/packages/generic/mirrorpilot/${{ github.ref_name }}/${INSTALLER_NAME}"
+          fi
+        continue-on-error: true
